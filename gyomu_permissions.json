@@ -1,0 +1,50 @@
+{
+  "role_id": 3,
+  "role_name": "配送管理者",
+  "page_permissions": [
+    {
+      "page_name": "📅 会社カレンダー",
+      "can_view": true,
+      "can_edit": false
+    },
+    {
+      "page_name": "📋 出荷指示書",
+      "can_view": true,
+      "can_edit": true
+    },
+    {
+      "page_name": "CSV受注取込",
+      "can_view": true,
+      "can_edit": true
+    },
+    {
+      "page_name": "ダッシュボード",
+      "can_view": true,
+      "can_edit": false
+    },
+    {
+      "page_name": "納入進度",
+      "can_view": true,
+      "can_edit": true
+    },
+    {
+      "page_name": "配送便計画",
+      "can_view": true,
+      "can_edit": true
+    }
+  ],
+  "tab_permissions": [
+    {
+      "page_name": "配送便計画",
+      "tab_name": "📦 出荷管理",
+      "can_view": true,
+      "can_edit": true
+    },
+    {
+      "page_name": "配送便計画",
+      "tab_name": "🚛 積載計画",
+      "can_view": true,
+      "can_edit": true
+    }
+  ]
+}

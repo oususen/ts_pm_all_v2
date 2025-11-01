@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 仮想環境
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 環境変数ファイル（機密情報）
+.env
+.env.local
+.env.production
+
+# データベースファイル
+*.db
+*.sqlite
+*.sqlite3
+
+# ログファイル
+*.log
+user_management.log
+
+# テストとカバレッジ
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 一時ファイル
+*.tmp
+*.temp
+tmp/
+temp/
+
+# データファイル（サンプル/顧客データ）
+*.csv
+*.xlsx
+*.xls
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.docx
+
+# 出力フォルダ
+output/
+移動ファイル２/
+
+# Streamlit設定（シークレット）
+.streamlit/secrets.toml
+
+# Docker（オプション：Docker設定は共有する場合コメントアウト）
+# Dockerfile
+# docker-compose.yml
+# .dockerignore

@@ -1,0 +1,269 @@
+{
+  "管理者": {
+    "role_id": 1,
+    "role_name": "管理者",
+    "description": "全ての機能にアクセス可能",
+    "page_permissions": [
+      {
+        "page_name": "📅 会社カレンダー",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "📋 出荷指示書",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "CSV受注取込",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "ダッシュボード",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "ユーザー管理",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "制限設定",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "生産計画",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "納入進度",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "製品管理",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "配送便計画",
+        "can_view": true,
+        "can_edit": true
+      }
+    ],
+    "tab_permissions": [
+      {
+        "page_name": "生産計画",
+        "tab_name": "📊 計画シミュレーション",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "生産計画",
+        "tab_name": "📝 生産計画管理",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "生産計画",
+        "tab_name": "🔧 製造工程（加工対象）",
+        "can_view": true,
+        "can_edit": false
+      }
+    ]
+  },
+  "生産管理者": {
+    "role_id": 2,
+    "role_name": "生産管理者",
+    "description": "生産計画・製造工程の管理",
+    "page_permissions": [
+      {
+        "page_name": "📅 会社カレンダー",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "CSV受注取込",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "ダッシュボード",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "制限設定",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "生産計画",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "納入進度",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "製品管理",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "配送便計画",
+        "can_view": true,
+        "can_edit": false
+      }
+    ],
+    "tab_permissions": [
+      {
+        "page_name": "生産計画",
+        "tab_name": "📊 計画シミュレーション",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "生産計画",
+        "tab_name": "📝 生産計画管理",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "生産計画",
+        "tab_name": "🔧 製造工程（加工対象）",
+        "can_view": true,
+        "can_edit": false
+      }
+    ]
+  },
+  "配送管理者": {
+    "role_id": 3,
+    "role_name": "配送管理者",
+    "description": "配送便計画・納入進度の管理",
+    "page_permissions": [
+      {
+        "page_name": "📅 会社カレンダー",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "📋 出荷指示書",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "CSV受注取込",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "ダッシュボード",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "納入進度",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "配送便計画",
+        "can_view": true,
+        "can_edit": true
+      }
+    ],
+    "tab_permissions": [
+      {
+        "page_name": "配送便計画",
+        "tab_name": "📦 出荷管理",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "配送便計画",
+        "tab_name": "🚛 積載計画",
+        "can_view": true,
+        "can_edit": true
+      }
+    ]
+  },
+  "閲覧者": {
+    "role_id": 4,
+    "role_name": "閲覧者",
+    "description": "全画面の閲覧のみ可能",
+    "page_permissions": [
+      {
+        "page_name": "📅 会社カレンダー",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "CSV受注取込",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "ダッシュボード",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "ユーザー管理",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "制限設定",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "生産計画",
+        "can_view": true,
+        "can_edit": true
+      },
+      {
+        "page_name": "納入進度",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "製品管理",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "配送便計画",
+        "can_view": true,
+        "can_edit": false
+      }
+    ],
+    "tab_permissions": [
+      {
+        "page_name": "生産計画",
+        "tab_name": "📊 計画シミュレーション",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "生産計画",
+        "tab_name": "📝 生産計画管理",
+        "can_view": true,
+        "can_edit": false
+      },
+      {
+        "page_name": "生産計画",
+        "tab_name": "🔧 製造工程（加工対象）",
+        "can_view": true,
+        "can_edit": false
+      }
+    ]
+  }
+}

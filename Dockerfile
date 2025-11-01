@@ -1,0 +1,34 @@
+# Python 3.11 をベースイメージとして使用
+FROM python:3.11-slim
+
+# 作業ディレクトリを設定
+WORKDIR /app
+
+# システムパッケージの更新と必要なパッケージのインストール
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libmariadb-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# requirements.txt をコピー
+COPY requirements.txt .
+
+# pywin32 を除外して依存関係をインストール
+RUN grep -v "pywin32" requirements.txt > requirements_linux.txt && \
+    pip install --no-cache-dir -r requirements_linux.txt && \
+    rm requirements_linux.txt
+
+# アプリケーションのソースコードをコピー
+COPY . .
+
+# Streamlit のポート（デフォルト: 8501）を公開
+EXPOSE 8501
+
+# ヘルスチェック
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+
+# Streamlit アプリケーションを起動
+CMD ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]

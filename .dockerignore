@@ -1,0 +1,75 @@
+# Git関連
+.git
+.gitignore
+
+# Python仮想環境
+venv/
+env/
+ENV/
+.venv
+
+# Python キャッシュ
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDE設定
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# テストとカバレッジ
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ログファイル
+*.log
+logs/
+
+# データベースファイル（SQLite）
+*.db
+*.sqlite
+*.sqlite3
+
+# 環境変数ファイル（本番用）
+.env.production
+.env.local
+
+# ドキュメント
+*.md
+SETUP_GUIDE.md
+USER_AUTH_README.md
+CUSTOMER_SWITCHING_GUIDE.md
+TIERA_IMPLEMENTATION_SUMMARY.md
+GYOMU_USER_MANUAL.md
+*.docx
+*.pdf
+
+# 一時ファイル
+*.tmp
+*.temp
+tmp/
+temp/
+
+# CSV/Excel/画像ファイル（サンプルデータ）
+*.csv
+*.xlsx
+*.xls
+*.png
+*.jpg
+*.jpeg
+
+# その他の除外ファイル
+output/
+移動ファイル２/
+.claude/
+.streamlit/secrets.toml
+
+# Docker関連
+Dockerfile
+docker-compose.yml
+.dockerignore
