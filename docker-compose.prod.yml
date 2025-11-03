@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # MySQL データベース
+  mysql:
+    image: mysql:8.0
+    container_name: ts_pm_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${PRIMARY_DB_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: kubota_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init_db.sh:/docker-entrypoint-initdb.d/init_db.sh
+    networks:
+      - ts_pm_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${PRIMARY_DB_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # MySQLのパフォーマンス最適化
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=512M
+      --innodb-log-file-size=256M
+      --max-connections=200
+
+  # Streamlit アプリケーション
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ts_pm_app
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      # アプリケーション設定
+      APP_ENV: ${APP_ENV:-production}
+
+      # データベース設定（Docker 環境用）
+      DEV_DB_HOST: mysql
+      DEV_DB_USER: root
+      DEV_DB_PASSWORD: ${PRIMARY_DB_PASSWORD:-rootpassword}
+      DEV_DB_NAME: kubota_db
+      DEV_DB_PORT: 3306
+
+      # 久保田様用データベース
+      KUBOTA_DB_HOST: mysql
+      KUBOTA_DB_USER: root
+      KUBOTA_DB_PASSWORD: ${PRIMARY_DB_PASSWORD:-rootpassword}
+      KUBOTA_DB_NAME: kubota_db
+      KUBOTA_DB_PORT: 3306
+
+      # ティエラ様用データベース
+      TIERA_DB_HOST: mysql
+      TIERA_DB_USER: root
+      TIERA_DB_PASSWORD: ${PRIMARY_DB_PASSWORD:-rootpassword}
+      TIERA_DB_NAME: tiera_db
+      TIERA_DB_PORT: 3306
+
+      # デフォルト顧客
+      DEFAULT_CUSTOMER: ${DEFAULT_CUSTOMER:-kubota}
+
+      # ティエラ様設定
+      TIERA_TRUCK_PRIORITY: ${TIERA_TRUCK_PRIORITY:-evening}
+
+      # Streamlit パフォーマンス設定
+      STREAMLIT_SERVER_RUN_ON_SAVE: false
+      STREAMLIT_SERVER_FILE_WATCHER_TYPE: none
+    # 本番環境ではボリュームマウントなし（高速）
+    # volumes:
+    #   - .:/app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - ts_pm_network
+    # リソース制限（必要に応じて調整）
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  ts_pm_network:
+    driver: bridge

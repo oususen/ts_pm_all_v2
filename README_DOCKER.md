@@ -31,28 +31,40 @@ $env:PRIMARY_DB_PASSWORD="your_secure_password_here"
 
 ### 3. Docker コンテナの起動
 
+**開発環境（コード変更を反映、やや遅い）:**
+
 ```bash
 docker-compose up -d
 ```
 
+**本番環境（高速、コード変更は反映されない）:**
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+
 初回起動時は、イメージのビルドに数分かかる場合があります。
+
+**パフォーマンス改善のため、本番用設定（docker-compose.prod.yml）の使用を推奨します。**
 
 ### 4. アプリケーションへのアクセス
 
 ブラウザで以下の URL を開きます：
 
-```
+```text
 http://localhost:8501
 ```
 
 ## 便利なコマンド
 
 ### コンテナの状態確認
+
 ```bash
 docker-compose ps
 ```
 
 ### ログの確認
+
 ```bash
 # アプリのログ
 docker-compose logs -f app
@@ -62,21 +74,25 @@ docker-compose logs -f mysql
 ```
 
 ### コンテナの停止
+
 ```bash
 docker-compose down
 ```
 
 ### コンテナとデータの完全削除
+
 ```bash
 docker-compose down -v
 ```
 
 ### データベースへの直接接続
+
 ```bash
 docker exec -it ts_pm_mysql mysql -u root -p
 ```
 
 ### コンテナ内でのコマンド実行
+
 ```bash
 # アプリコンテナ内でシェルを起動
 docker exec -it ts_pm_app bash
@@ -96,11 +112,13 @@ ports:
 ### データベース接続エラー
 
 1. MySQL コンテナが起動しているか確認：
+
    ```bash
    docker-compose ps
    ```
 
 2. データベースのヘルスチェック：
+
    ```bash
    docker-compose logs mysql
    ```
@@ -110,9 +128,15 @@ ports:
 依存関係を変更した場合：
 
 ```bash
+# 開発環境
 docker-compose down
 docker-compose build --no-cache
 docker-compose up -d
+
+# 本番環境（推奨）
+docker-compose -f docker-compose.prod.yml down
+docker-compose -f docker-compose.prod.yml build --no-cache
+docker-compose -f docker-compose.prod.yml up -d
 ```
 
 ### streamlit が見つからないエラー
@@ -153,6 +177,54 @@ RUN sed '/pywin32/s/^/#/' requirements.txt > requirements_docker.txt && \
 ```
 
 この処理により、`streamlit` を含む全てのLinux対応パッケージが正しくインストールされます。
+
+## パフォーマンス最適化
+
+### 開発環境 vs 本番環境
+
+このプロジェクトには2つのdocker-compose設定があります：
+
+| 設定ファイル | 用途 | 速度 | ホットリロード |
+|------------|------|------|--------------|
+| `docker-compose.yml` | 開発環境 | 遅い | ✓ 有効 |
+| `docker-compose.prod.yml` | 本番・実行環境 | **高速** | ✗ 無効 |
+
+### なぜ開発環境は遅いのか？
+
+`docker-compose.yml` では、コード変更を即座に反映するために全てのファイルをボリュームマウントしています（66行目: `- .:/app`）。
+
+WindowsとLinuxコンテナ間のファイル共有は、I/Oパフォーマンスに大きなオーバーヘッドが発生します。これが遅延の主な原因です。
+
+### パフォーマンス改善方法
+
+推奨：本番用設定を使用**
+
+```bash
+# 本番用で起動（高速）
+docker-compose -f docker-compose.prod.yml up -d
+
+# コードを変更する必要がない場合は、本番用設定を使用してください：
+
+```bash
+# 本番用で起動（高速）
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+本番用設定の特徴：**
+
+- ✓ ボリュームマウントなし（ファイルはイメージに焼き込み）
+
+- ✓ Streamlitのファイル監視無効化
+- ✓ MySQLのパフォーマンス最適化
+- ✓ リソース制限の明示（CPU: 2コア、メモリ: 2GB）
+
+**注意：** コードを変更した場合は、イメージを再ビルドする必要があります。
+
+```bash
+# コード変更後の再ビルド
+docker-compose -f docker-compose.prod.yml down
+docker-compose -f docker-compose.prod.yml up -d --build
+```
 
 ## 開発時の注意事項
 
