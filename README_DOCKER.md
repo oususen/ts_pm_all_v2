@@ -115,6 +115,45 @@ docker-compose build --no-cache
 docker-compose up -d
 ```
 
+### streamlit が見つからないエラー
+
+エラーメッセージ：`streamlit: command not found` または `ModuleNotFoundError: No module named 'streamlit'`
+
+**原因**:
+
+- Dockerfile の `pywin32` 除外処理が正しく動作していない
+- 古いDockerイメージキャッシュを使用している
+
+**解決策**:
+
+```bash
+# キャッシュなしで完全再ビルド
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+
+# または個別にビルド
+docker build --no-cache -t ts_pm_app .
+```
+
+## Dockerfileの重要な設定
+
+### Windows専用パッケージの除外
+
+このプロジェクトでは Windows 専用パッケージ（`pywin32`）を含む `requirements.txt` を使用していますが、Linux コンテナでは不要です。
+
+Dockerfile では以下のように `pywin32` を除外してインストールしています：
+
+```dockerfile
+# pywin32 を除外して依存関係をインストール
+# sedを使用してpywin32を含む行をコメントアウト
+RUN sed '/pywin32/s/^/#/' requirements.txt > requirements_docker.txt && \
+    pip install --no-cache-dir -r requirements_docker.txt && \
+    rm requirements_docker.txt
+```
+
+この処理により、`streamlit` を含む全てのLinux対応パッケージが正しくインストールされます。
+
 ## 開発時の注意事項
 
 - コードの変更は自動的にコンテナに反映されます（ホットリロード）

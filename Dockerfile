@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     libmariadb-dev \
+    curl \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
@@ -16,9 +17,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # pywin32 を除外して依存関係をインストール
-RUN grep -v "pywin32" requirements.txt > requirements_linux.txt && \
-    pip install --no-cache-dir -r requirements_linux.txt && \
-    rm requirements_linux.txt
+# sedを使用してpywin32を含む行をコメントアウト
+RUN sed '/pywin32/s/^/#/' requirements.txt > requirements_docker.txt && \
+    pip install --no-cache-dir -r requirements_docker.txt && \
+    rm requirements_docker.txt
 
 # アプリケーションのソースコードをコピー
 COPY . .
