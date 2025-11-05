@@ -14,9 +14,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # .envファイルを読み込む（プロジェクトルートから）
+# override=False: 既存の環境変数（docker-composeなど）を優先
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / '.env'
-load_dotenv(dotenv_path=ENV_PATH, override=True)
+load_dotenv(dotenv_path=ENV_PATH, override=False)
 
 # -------------------------
 # 環境判定

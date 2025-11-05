@@ -1,19 +1,18 @@
-version: '3.8'
-
 services:
   # MySQL データベース
   mysql:
     image: mysql:8.0
-    container_name: ts_pm_mysql
+    container_name: ts_pm_mysql_v2
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${PRIMARY_DB_PASSWORD:-rootpassword}
       MYSQL_DATABASE: kubota_db
     ports:
-      - "3306:3306"
+      - "3308:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init_db.sh:/docker-entrypoint-initdb.d/init_db.sh
+      - ./init_schema.sql:/docker-entrypoint-initdb.d/init_schema.sql
     networks:
       - ts_pm_network
     healthcheck:
@@ -22,44 +21,59 @@ services:
       timeout: 5s
       retries: 5
 
+  # Adminer - WebベースのDB管理ツール
+  adminer:
+    image: adminer:latest
+    container_name: ts_pm_adminer_v2
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+      ADMINER_DESIGN: pepa-linha
+    networks:
+      - ts_pm_network
+    depends_on:
+      - mysql
+
   # Streamlit アプリケーション
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ts_pm_app
+    container_name: ts_pm_app_v2
     restart: unless-stopped
     ports:
-      - "8501:8501"
+      - "8502:8501"
     environment:
       # アプリケーション設定
       APP_ENV: ${APP_ENV:-development}
 
-      # データベース設定（Docker 環境用）
-      DEV_DB_HOST: mysql
-      DEV_DB_USER: root
-      DEV_DB_PASSWORD: ${PRIMARY_DB_PASSWORD:-rootpassword}
-      DEV_DB_NAME: kubota_db
-      DEV_DB_PORT: 3306
+      # データベース設定（Docker 内側用）
+      DEV_DB_HOST: ${DEV_DB_HOST_DOCKER:-mysql}
+      DEV_DB_USER: ${DEV_DB_USER_DOCKER:-root}
+      DEV_DB_PASSWORD: ${DEV_DB_PASSWORD_DOCKER:-rootpassword}
+      DEV_DB_NAME: ${DEV_DB_NAME_DOCKER:-kubota_db}
+      DEV_DB_PORT: ${DEV_DB_PORT_DOCKER:-3306}
 
-      # 久保田様用データベース
-      KUBOTA_DB_HOST: mysql
-      KUBOTA_DB_USER: root
-      KUBOTA_DB_PASSWORD: ${PRIMARY_DB_PASSWORD:-rootpassword}
-      KUBOTA_DB_NAME: kubota_db
-      KUBOTA_DB_PORT: 3306
+      # 既定顧客用データベース
+      KUBOTA_DB_HOST: ${KUBOTA_DB_HOST_DOCKER:-mysql}
+      KUBOTA_DB_USER: ${KUBOTA_DB_USER_DOCKER:-root}
+      KUBOTA_DB_PASSWORD: ${KUBOTA_DB_PASSWORD_DOCKER:-rootpassword}
+      KUBOTA_DB_NAME: ${KUBOTA_DB_NAME_DOCKER:-kubota_db}
+      KUBOTA_DB_PORT: ${KUBOTA_DB_PORT_DOCKER:-3306}
 
-      # ティエラ様用データベース
-      TIERA_DB_HOST: mysql
-      TIERA_DB_USER: root
-      TIERA_DB_PASSWORD: ${PRIMARY_DB_PASSWORD:-rootpassword}
-      TIERA_DB_NAME: tiera_db
-      TIERA_DB_PORT: 3306
+      # ティエラ用データベース
+      TIERA_DB_HOST: ${TIERA_DB_HOST_DOCKER:-mysql}
+      TIERA_DB_USER: ${TIERA_DB_USER_DOCKER:-root}
+      TIERA_DB_PASSWORD: ${TIERA_DB_PASSWORD_DOCKER:-rootpassword}
+      TIERA_DB_NAME: ${TIERA_DB_NAME_DOCKER:-tiera_db}
+      TIERA_DB_PORT: ${TIERA_DB_PORT_DOCKER:-3306}
 
       # デフォルト顧客
       DEFAULT_CUSTOMER: ${DEFAULT_CUSTOMER:-kubota}
 
-      # ティエラ様設定
+      # ティエラ設定
       TIERA_TRUCK_PRIORITY: ${TIERA_TRUCK_PRIORITY:-evening}
     volumes:
       # アプリケーションコードをマウント（開発時の変更を反映）
@@ -80,3 +94,4 @@ volumes:
 networks:
   ts_pm_network:
     driver: bridge
+    name: ts_pm_network_v2
