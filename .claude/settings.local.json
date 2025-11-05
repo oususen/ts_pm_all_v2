@@ -6,7 +6,8 @@
       "Read(//c/Users/user/.virtualenvs/django-KssZbzz_/**)",
       "Bash(cat:*)",
       "Bash(powershell:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(mv:*)"
     ],
     "deny": [],
     "ask": []

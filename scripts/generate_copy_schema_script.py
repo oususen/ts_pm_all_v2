@@ -86,7 +86,7 @@ ORDER BY TABLE_NAME;
 """
 
     # ファイルに保存
-    output_file = "copy_schema_kubota_to_tiera_auto.sql"
+    output_file = "../sql/copy_schema_kubota_to_tiera_auto.sql"
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(sql_script)
 

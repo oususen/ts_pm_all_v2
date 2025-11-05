@@ -30,7 +30,7 @@ def apply_to_database(db_name):
         cursor = conn.cursor()
 
         # SQLファイルを読み込み
-        with open('create_product_groups.sql', 'r', encoding='utf-8') as f:
+        with open('../sql/create_product_groups.sql', 'r', encoding='utf-8') as f:
             sql_content = f.read()
 
         # SQLをステートメントごとに分割して実行
