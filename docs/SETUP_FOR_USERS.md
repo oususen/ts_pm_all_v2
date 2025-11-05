@@ -72,7 +72,7 @@ docker-compose up -d
 
 ブラウザ（Chrome、Edge など）を開いて、以下のアドレスにアクセス：
 
-```
+```text
 http://localhost:8501
 ```
 

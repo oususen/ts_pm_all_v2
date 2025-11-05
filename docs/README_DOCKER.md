@@ -508,7 +508,10 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ### streamlit が見つからないエラー
 
-エラーメッセージ：`streamlit: command not found` または `ModuleNotFoundError: No module named 'streamlit'`
+エラーメッセージ例:
+
+- `streamlit: command not found`
+- `ModuleNotFoundError: No module named 'streamlit'`
 
 **原因**:
 

@@ -66,7 +66,7 @@ python migrations/add_user_auth_tables.py
 
 **実行後の確認メッセージ:**
 
-```
+```text
 ✅ ユーザー認証・権限管理テーブルを作成しました
 ✅ デフォルト管理者ユーザー: admin / admin123
 ```
@@ -243,8 +243,15 @@ tab_permissions = [
 for page_name, tab_name in tab_permissions:
     for role in ['管理者', '生産管理者']:
         cursor.execute('''
-            INSERT OR IGNORE INTO tab_permissions (role_id, page_name, tab_name, can_view)
-            SELECT id, ?, ?, 1 FROM roles WHERE role_name = ?
+            INSERT OR IGNORE INTO tab_permissions (
+                role_id,
+                page_name,
+                tab_name,
+                can_view
+            )
+            SELECT id, ?, ?, 1
+              FROM roles
+             WHERE role_name = ?
         ''', (page_name, tab_name, role))
 ```
 

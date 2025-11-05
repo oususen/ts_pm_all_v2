@@ -37,7 +37,7 @@ mysql -u root -p < sql/init_schema.sql
 
 **定義されているストアドプロシージャ**:
 
-#### (1) recompute_planned_progress_by_product
+#### (1) recompute_planned_progress_by_product（Kubota版）
 
 - **機能**: 計画進捗残の再計算
 - **パラメータ**:
@@ -47,7 +47,7 @@ mysql -u root -p < sql/init_schema.sql
 - **計算式**: `前日残 + (出荷実績 or 計画数) - 注文数`
 - **更新対象**: `delivery_progress.planned_progress_quantity`
 
-#### (2) recompute_shipped_remaining_by_product
+#### (2) recompute_shipped_remaining_by_product（Kubota版）
 
 - **機能**: 出荷残の再計算
 - **パラメータ**:
@@ -78,11 +78,11 @@ CALL recompute_shipped_remaining_by_product(1, '2025-10-01', '2025-10-31');
 
 **定義されているストアドプロシージャ**:
 
-#### (1) recompute_planned_progress_by_product
+#### (1) recompute_planned_progress_by_product（Tiera版）
 
 - 久保田様版と同一のロジック
 
-#### (2) recompute_shipped_remaining_by_product
+#### (2) recompute_shipped_remaining_by_product（Tiera版）
 
 - 久保田様版と同一のロジック
 
@@ -149,7 +149,7 @@ SOURCE sql/create_product_groups.sql;
 
 初回セットアップ時の推奨実行順序：
 
-```
+```text
 1. init_schema.sql           # スキーマ定義
 2. kubota_stored_procedures.sql  # 久保田様ストアドプロシージャ
 3. tiera_stored_procedures.sql   # ティエラ様ストアドプロシージャ
@@ -158,7 +158,7 @@ SOURCE sql/create_product_groups.sql;
 
 新規顧客追加時：
 
-```
+```text
 1. copy_schema_kubota_to_tiera_auto.sql  # スキーマコピー
 2. (新顧客名)_stored_procedures.sql      # 顧客用ストアドプロシージャ
 ```

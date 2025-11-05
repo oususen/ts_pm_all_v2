@@ -111,7 +111,7 @@ SQLスクリプト集。データベース初期化・ストアドプロシー�
 | `init_schema.sql` | メインデータベーススキーマ定義 | 全DB |
 | `kubota_stored_procedures.sql` | 久保田様向けストアドプロシージャ2種（計画進捗／出荷残） | kubota_db |
 | `tiera_stored_procedures.sql` | ティエラ様向けストアドプロシージャ2種（計画進捗／出荷残） | tiera_db |
-| `copy_schema_kubota_to_tiera_auto.sql` | 久保田DBスキーマをティエラDBへコピー（自動生成） | kubota_db / tiera_db |
+| `copy_schema_kubota_to_tiera_auto.sql` | 久保田DBスキーマをティエラDBへコピー | 両DB |
 | `create_product_groups.sql` | 製品グループマスタデータ作成 | 全DB |
 
 詳細は [sql/README.md](sql/README.md) を参照してください。
