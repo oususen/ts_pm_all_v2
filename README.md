@@ -4,7 +4,7 @@
 
 ## 📁 ディレクトリ構造
 
-```
+```text
 ts_pm_all_v2/
 ├── domain/              # ドメイン層（ビジネスロジック）
 ├── repository/          # データアクセス層
@@ -59,7 +59,6 @@ ts_pm_all_v2/
 | `import_data.bat` | データインポート用Windowsバッチファイル |
 | `export_data.bat` | データエクスポート用Windowsバッチファイル |
 
-
 ### ルール定義ファイル
 
 | ファイル | 目的 |
@@ -110,9 +109,9 @@ SQLスクリプト集。データベース初期化・ストアドプロシー�
 | ファイル | 目的 | 対象DB |
 |---------|------|--------|
 | `init_schema.sql` | メインデータベーススキーマ定義 | 全DB |
-| `kubota_stored_procedures.sql` | 久保田様用ストアドプロシージャ<br>- `recompute_planned_progress_by_product`<br>- `recompute_shipped_remaining_by_product` | kubota_db |
-| `tiera_stored_procedures.sql` | ティエラ様用ストアドプロシージャ<br>- `recompute_planned_progress_by_product`<br>- `recompute_shipped_remaining_by_product` | tiera_db |
-| `copy_schema_kubota_to_tiera_auto.sql` | 久保田DBスキーマをティエラDBにコピー（自動生成版） | kubota_db → tiera_db |
+| `kubota_stored_procedures.sql` | 久保田様向けストアドプロシージャ2種（計画進捗／出荷残） | kubota_db |
+| `tiera_stored_procedures.sql` | ティエラ様向けストアドプロシージャ2種（計画進捗／出荷残） | tiera_db |
+| `copy_schema_kubota_to_tiera_auto.sql` | 久保田DBスキーマをティエラDBへコピー（自動生成） | kubota_db / tiera_db |
 | `create_product_groups.sql` | 製品グループマスタデータ作成 | 全DB |
 
 詳細は [sql/README.md](sql/README.md) を参照してください。
@@ -125,11 +124,12 @@ SQLスクリプト集。データベース初期化・ストアドプロシー�
 
 | ファイル | 目的 | 実行タイミング |
 |---------|------|---------------|
-| `generate_copy_schema_script.py` | kubota_dbのスキーマをtiera_dbにコピーするSQLスクリプトを自動生成 | スキーマ変更後、他の顧客DBに反映する前 |
+| `generate_copy_schema_script.py` | 久保田DBスキーマをティエラDBへコピーするSQLを生成 | スキーマ変更後など |
 | `apply_product_groups.py` | 製品グループマスタデータをDBに適用 | 初回セットアップ時 |
 | `export_db_structure.py` | データベース構造をエクスポート・ドキュメント化 | スキーマ変更前の状態保存時 |
 
 **実行方法**:
+
 ```bash
 # scriptsディレクトリから
 cd scripts
@@ -148,6 +148,7 @@ python scripts/generate_copy_schema_script.py
 ドメイン駆動設計に基づくビジネスロジック層。
 
 ### domain/models/
+
 ドメインモデル（エンティティ）
 
 | ファイル | 目的 |
@@ -158,6 +159,7 @@ python scripts/generate_copy_schema_script.py
 | `transport.py` | 配送計画モデル |
 
 ### domain/calculators/
+
 計算ロジック（アルゴリズム）
 
 | ファイル | 目的 | 対象顧客 |
@@ -167,6 +169,7 @@ python scripts/generate_copy_schema_script.py
 | `tiera_transport_planner.py` | 配送計画・積載計算（ティエラ様専用） | ティエラ様 |
 
 ### domain/validators/
+
 バリデーションロジック
 
 | ファイル | 目的 |
@@ -234,6 +237,7 @@ python scripts/generate_copy_schema_script.py
 ユーザーインターフェース層（Streamlit）。
 
 ### ui/components/
+
 再利用可能なUIコンポーネント
 
 | ファイル | 目的 |
@@ -243,6 +247,7 @@ python scripts/generate_copy_schema_script.py
 | `tables.py` | テーブル表示コンポーネント |
 
 ### ui/layouts/
+
 レイアウトコンポーネント
 
 | ファイル | 目的 |
@@ -250,6 +255,7 @@ python scripts/generate_copy_schema_script.py
 | `sidebar.py` | サイドバーナビゲーション |
 
 ### ui/pages/
+
 画面（ページ）定義
 
 | ファイル | 目的 | 対象顧客 |
@@ -324,7 +330,7 @@ python scripts/generate_copy_schema_script.py
 
 プロジェクトはドメイン駆動設計（DDD）とレイヤードアーキテクチャに基づいています：
 
-```
+```text
 UI層 (ui/)
     ↓
 サービス層 (services/)

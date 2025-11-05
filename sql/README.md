@@ -5,17 +5,20 @@
 ## 📄 ファイル一覧
 
 ### 1. init_schema.sql
+
 **目的**: メインデータベーススキーマ定義
 **対象DB**: kubota_db / tiera_db
 **実行タイミング**: 初回セットアップ時
 
 **内容**:
+
 - 全テーブル定義
 - インデックス定義
 - 外部キー制約
 - デフォルトデータ
 
 **実行方法**:
+
 ```bash
 # Docker環境の場合（自動実行）
 docker-compose up
@@ -27,6 +30,7 @@ mysql -u root -p < sql/init_schema.sql
 ---
 
 ### 2. kubota_stored_procedures.sql
+
 **目的**: 久保田様データベース用ストアドプロシージャ
 **対象DB**: kubota_db
 **実行タイミング**: DB初期化後
@@ -34,6 +38,7 @@ mysql -u root -p < sql/init_schema.sql
 **定義されているストアドプロシージャ**:
 
 #### (1) recompute_planned_progress_by_product
+
 - **機能**: 計画進捗残の再計算
 - **パラメータ**:
   - `p_product_id` (INT): 製品ID
@@ -43,6 +48,7 @@ mysql -u root -p < sql/init_schema.sql
 - **更新対象**: `delivery_progress.planned_progress_quantity`
 
 #### (2) recompute_shipped_remaining_by_product
+
 - **機能**: 出荷残の再計算
 - **パラメータ**:
   - `p_product_id` (INT): 製品ID
@@ -52,6 +58,7 @@ mysql -u root -p < sql/init_schema.sql
 - **更新対象**: `delivery_progress.shipped_remaining_quantity`
 
 **実行方法**:
+
 ```sql
 USE kubota_db;
 SOURCE sql/kubota_stored_procedures.sql;
@@ -64,6 +71,7 @@ CALL recompute_shipped_remaining_by_product(1, '2025-10-01', '2025-10-31');
 ---
 
 ### 3. tiera_stored_procedures.sql
+
 **目的**: ティエラ様データベース用ストアドプロシージャ
 **対象DB**: tiera_db
 **実行タイミング**: DB初期化後
@@ -71,12 +79,15 @@ CALL recompute_shipped_remaining_by_product(1, '2025-10-01', '2025-10-31');
 **定義されているストアドプロシージャ**:
 
 #### (1) recompute_planned_progress_by_product
+
 - 久保田様版と同一のロジック
 
 #### (2) recompute_shipped_remaining_by_product
+
 - 久保田様版と同一のロジック
 
 **実行方法**:
+
 ```sql
 USE tiera_db;
 SOURCE sql/tiera_stored_procedures.sql;
@@ -89,21 +100,25 @@ CALL recompute_shipped_remaining_by_product(1, '2025-10-01', '2025-10-31');
 ---
 
 ### 4. copy_schema_kubota_to_tiera_auto.sql
+
 **目的**: 久保田DBのスキーマをティエラDBにコピー（自動生成版）
 **対象DB**: kubota_db → tiera_db
 **実行タイミング**: 新規顧客DB追加時
 
 **処理内容**:
+
 1. `tiera_db` データベースを作成
 2. `kubota_db` の全テーブル構造をコピー
 3. インデックス・外部キーを複製
 
 **実行方法**:
+
 ```bash
 mysql -u root -p < sql/copy_schema_kubota_to_tiera_auto.sql
 ```
 
 **注意事項**:
+
 - データはコピーされません（構造のみ）
 - 既存の `tiera_db` は削除されます（DROP DATABASE）
 - このスクリプトは `generate_copy_schema_script.py` により自動生成されました
@@ -111,15 +126,18 @@ mysql -u root -p < sql/copy_schema_kubota_to_tiera_auto.sql
 ---
 
 ### 5. create_product_groups.sql
+
 **目的**: 製品グループマスタデータの作成
 **対象DB**: kubota_db / tiera_db
 **実行タイミング**: 初回セットアップ時
 
 **処理内容**:
+
 - 製品グループテーブルへのサンプルデータ挿入
 - 製品と製品グループの紐付け
 
 **実行方法**:
+
 ```sql
 USE kubota_db;
 SOURCE sql/create_product_groups.sql;
@@ -155,6 +173,7 @@ SOURCE sql/create_product_groups.sql;
 2. マイグレーションスクリプトを作成（`migrations/` ディレクトリ）
 3. 既存データベースに対してマイグレーション実行
 4. 必要に応じて `copy_schema_kubota_to_tiera_auto.sql` を再生成
+
    ```bash
    python generate_copy_schema_script.py
    ```
@@ -163,6 +182,7 @@ SOURCE sql/create_product_groups.sql;
 
 1. 該当する `*_stored_procedures.sql` を編集
 2. データベースに対して再実行
+
    ```sql
    SOURCE sql/kubota_stored_procedures.sql;
    ```

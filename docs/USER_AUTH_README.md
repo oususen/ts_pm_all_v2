@@ -7,16 +7,19 @@
 ### 主な機能
 
 ✅ **ユーザー認証**
+
 - ログイン/ログアウト
 - パスワードのハッシュ化（SHA-256）
 - セッション管理
 
 ✅ **ロールベースのアクセス制御**
+
 - ユーザーごとに複数のロール割り当て可能
 - ロールに基づいたページアクセス制御
 - タブレベルの細かい権限設定
 
 ✅ **ユーザー管理**
+
 - ユーザーの登録・編集・削除
 - ロールの割り当て
 - 管理者権限の設定
@@ -62,12 +65,14 @@ python migrations/add_user_auth_tables.py
 ```
 
 **実行後の確認メッセージ:**
+
 ```
 ✅ ユーザー認証・権限管理テーブルを作成しました
 ✅ デフォルト管理者ユーザー: admin / admin123
 ```
 
 **作成されるテーブル:**
+
 - `users` - ユーザー情報
 - `roles` - ロール定義
 - `user_roles` - ユーザーとロールの紐付け
@@ -251,14 +256,17 @@ for page_name, tab_name in tab_permissions:
 
 1. ユーザー名とパスワードを確認
 2. MySQLで`users`テーブルに該当ユーザーが存在するか確認
+
    ```sql
    SELECT * FROM users WHERE username = 'admin';
    ```
+
 3. `is_active`が1（有効）になっているか確認
 
 ### ページが表示されない
 
 1. ユーザーにロールが割り当てられているか確認
+
    ```sql
    SELECT u.username, r.role_name
    FROM users u
@@ -266,7 +274,9 @@ for page_name, tab_name in tab_permissions:
    JOIN roles r ON ur.role_id = r.id
    WHERE u.username = 'your_username';
    ```
+
 2. ロールにページ権限が設定されているか確認
+
    ```sql
    SELECT * FROM page_permissions WHERE role_id = 1;
    ```
@@ -284,6 +294,7 @@ python migrations/add_user_auth_tables.py
 ```
 
 **MySQL接続エラーの場合:**
+
 - `config.py`の接続情報を確認
 - MySQLサーバーが起動しているか確認
 - データベース`kubota_db`が存在するか確認
@@ -325,6 +336,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 これで、ユーザー認証・権限管理機能が利用可能になりました！
 
 次のステップ:
+
 - [ ] 管理者パスワードを変更
 - [ ] 実際のユーザーを登録
 - [ ] ロールの割り当て

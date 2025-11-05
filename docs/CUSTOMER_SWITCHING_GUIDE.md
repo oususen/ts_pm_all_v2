@@ -6,7 +6,7 @@
 
 ## アーキテクチャ
 
-```
+```text
 ┌─────────────┐
 │  ログイン    │
 └──────┬──────┘
@@ -33,6 +33,7 @@
 ## データフロー
 
 ### 1. アプリ起動時
+
 ```python
 # main.py
 class ProductionPlanningApp:
@@ -46,6 +47,7 @@ class ProductionPlanningApp:
 ```
 
 ### 2. 顧客選択
+
 ```python
 # サイドバーで顧客を選択
 selected_customer = st.selectbox(
@@ -55,13 +57,16 @@ selected_customer = st.selectbox(
 )
 
 # session_stateに保存
-st.session_state['current_customer'] = 'kubota' if selected_customer == "久保田" else 'tiera'
+st.session_state['current_customer'] = (
+    'kubota' if selected_customer == "久保田" else 'tiera'
+)
 
 # データベースマネージャーに反映
 db.switch_customer(st.session_state['current_customer'])
 ```
 
 ### 3. CSV取り込み
+
 ```python
 # CSV取り込みページで顧客に応じたサービスを使用
 customer = st.session_state.get('current_customer', 'kubota')
@@ -76,6 +81,7 @@ service.import_csv_data(uploaded_file)
 ```
 
 ### 4. データ取得
+
 ```python
 # 自動的に現在の顧客のDBからデータ取得
 df = db.execute_query("SELECT * FROM products")
@@ -87,7 +93,7 @@ df_tiera = db.execute_query("SELECT * FROM products", customer="tiera")
 
 ## 実装ファイル構成
 
-```
+```text
 ts_pm_all/
 ├── .env                              # 顧客別DB設定
 │   ├── KUBOTA_DB_* (久保田用)
@@ -122,6 +128,7 @@ ts_pm_all/
 ## 実装手順
 
 ### ステップ1: サイドバーに顧客選択UIを追加
+
 **ファイル**: `ui/layouts/sidebar.py`
 
 ```python
@@ -164,6 +171,7 @@ def create_sidebar(auth_service=None):
 ```
 
 ### ステップ2: main.pyでCustomerDatabaseManagerを使用
+
 **ファイル**: `main.py`
 
 ```python
@@ -190,6 +198,7 @@ class ProductionPlanningApp:
 ```
 
 ### ステップ3: 顧客別CSVサービスを作成
+
 **新規ファイル**: `services/tiera_csv_import_service.py`
 
 ```python
@@ -239,6 +248,7 @@ class TieraCSVImportService:
 ```
 
 ### ステップ4: CSV取り込みページを更新
+
 **ファイル**: `ui/pages/csv_import_page.py`
 
 ```python
@@ -274,6 +284,7 @@ class CSVImportPage:
 ## テスト方法
 
 ### 1. データベース作成
+
 ```sql
 -- ティエラ様用DBを作成
 CREATE DATABASE tiera_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -285,7 +296,7 @@ USE tiera_db;
 ```
 
 ### 2. 動作確認
-```
+
 1. アプリ起動
 2. ログイン
 3. サイドバーで「ティエラ」を選択
@@ -294,20 +305,23 @@ USE tiera_db;
 6. データがtiera_dbに保存されることを確認
 7. サイドバーで「久保田」に切り替え
 8. データがkubota_dbから取得されることを確認
-```
 
 ## よくある質問
 
 ### Q: テーブル名は同じでも大丈夫？
+
 **A**: はい、データベースが異なれば（kubota_db と tiera_db）、同じテーブル名を使用できます。
 
 ### Q: 顧客を切り替えた時、データはどうなる？
+
 **A**: `CustomerDatabaseManager` が自動的に適切なDBに接続するので、それぞれの顧客のデータが表示されます。
 
 ### Q: CSV形式が全く違う場合は？
+
 **A**: 顧客ごとに別々のCSVサービスクラスを作成し、それぞれ独自の処理を実装します。
 
 ### Q: 既存のkubotaデータは影響を受ける？
+
 **A**: いいえ、既存のkubota_dbはそのまま使用でき、影響を受けません。
 
 ## 注意事項
