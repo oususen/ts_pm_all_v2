@@ -395,14 +395,34 @@ class TieraTransportPlanner:
         for demand in demands:
             loaded = False
             container_id = demand['container_id']
+            product_code = demand.get('product_code', '')
+
+            # 🔍 デバッグ: 大量ケース製品を追跡
+            if '6245' in product_code or demand['num_containers'] > 15:
+                print(f"\n🔍 [Tiera-大量ケース] {product_code}: {demand['num_containers']}ケース, {demand['total_quantity']}個")
+                print(f"   納期: {demand['delivery_date']}, 積載日: {current_date}")
+                print(f"   底面積: {demand['floor_area']:.2f}m²")
 
             # トラックに順番に積載を試みる
             for _, truck_id, truck_info in available_trucks:
+                # 全量積載完了したらループを抜ける
+                if demand['num_containers'] <= 0:
+                    loaded = True
+                    break
+
                 truck_state = truck_states[truck_id]
+
+                # 🔍 デバッグ: トラック状態を表示
+                if '6245' in product_code or demand['num_containers'] > 15:
+                    print(f"   試行: {truck_state['truck_name']} (空き{truck_state['remaining_floor_area']:.2f}m² / 総{truck_state['total_floor_area']:.2f}m², 残り{demand['num_containers']}ケース)")
 
                 # 同じ容器が既に積載されているか確認（段積み統合用）
                 same_container_items = [item for item in truck_state['loaded_items']
                                        if item['container_id'] == container_id]
+
+                # 🔍 デバッグ: 段積みチェック
+                if '6245' in product_code or demand['num_containers'] > 15:
+                    print(f"      段積みチェック: same_container_items={len(same_container_items)}個")
 
                 if same_container_items:
                     # 同じ容器が既にある場合、段積みとして統合できるか確認
@@ -423,7 +443,15 @@ class TieraTransportPlanner:
                         additional_stacks = new_stacks - existing_stacks
                         additional_floor_area = additional_stacks * floor_area_per_container
 
+                        # 🔍 デバッグ: 段積み統合計算
+                        if '6245' in product_code or demand['num_containers'] > 15:
+                            print(f"      段積み統合: existing={existing_containers}, new_total={new_total_containers}, additional_floor={additional_floor_area:.2f}m², remaining={truck_state['remaining_floor_area']:.2f}m²")
+
                         if additional_floor_area <= truck_state['remaining_floor_area']:
+                            # 🔍 デバッグ: 段積み統合成功
+                            if '6245' in product_code or demand['num_containers'] > 15:
+                                print(f"      ✅ 段積み統合成功!")
+
                             # 段積みとして統合可能
                             truck_state['loaded_items'].append({
                                 'product_id': demand['product_id'],
@@ -437,11 +465,28 @@ class TieraTransportPlanner:
                                 'floor_area': demand['floor_area']
                             })
                             truck_state['remaining_floor_area'] -= additional_floor_area
+
+                            # ✅ 全量積載完了をマーク
+                            demand['num_containers'] = 0
+                            demand['total_quantity'] = 0
+                            demand['floor_area'] = 0
                             loaded = True
                             break
+                        else:
+                            # 🔍 デバッグ: 段積み統合失敗
+                            if '6245' in product_code or demand['num_containers'] > 15:
+                                print(f"      ❌ 段積み統合失敗: 追加底面積({additional_floor_area:.2f}m²)が空き({truck_state['remaining_floor_area']:.2f}m²)より大きい")
+
+                # 🔍 デバッグ: 積載チェック
+                if '6245' in product_code or demand['num_containers'] > 15:
+                    print(f"      全量積載チェック: demand['floor_area']={demand['floor_area']:.2f}m² <= remaining={truck_state['remaining_floor_area']:.2f}m² ? {demand['floor_area'] <= truck_state['remaining_floor_area']}")
 
                 # 同じ容器がない場合、または段積み統合できなかった場合は通常の積載を試みる
                 if not loaded and demand['floor_area'] <= truck_state['remaining_floor_area']:
+                    # 🔍 デバッグ: 積載成功
+                    if '6245' in product_code or demand['num_containers'] > 15:
+                        print(f"   ✅ {truck_state['truck_name']}に全量積載成功")
+
                     # 積載
                     truck_state['loaded_items'].append({
                         'product_id': demand['product_id'],
@@ -455,12 +500,122 @@ class TieraTransportPlanner:
                         'floor_area': demand['floor_area']
                     })
                     truck_state['remaining_floor_area'] -= demand['floor_area']
+                    # ✅ 全量積載完了をマーク
+                    demand['num_containers'] = 0
+                    demand['total_quantity'] = 0
+                    demand['floor_area'] = 0
                     loaded = True
                     break
+                elif not loaded and truck_state['remaining_floor_area'] > 0:
+                    # ✅ 分割積載：一部だけ積める場合
+                    container = container_map.get(container_id)
+                    if container:
+                        floor_area_per_container = (container.width * container.depth) / 1_000_000
+                        max_stack = getattr(container, 'max_stack', 1)
+                        is_stackable = demand.get('stackable', False)
 
-            if not loaded:
+                        # 🔍 デバッグ: 容器情報
+                        if '6245' in product_code or demand['num_containers'] > 15:
+                            print(f"      容器情報: 底面積={floor_area_per_container:.4f}m², max_stack={max_stack}, stackable={is_stackable}")
+
+                        # 積載可能な容器数を計算
+                        if max_stack > 1 and is_stackable:
+                            max_stacks = int(truck_state['remaining_floor_area'] / floor_area_per_container)
+                            loadable_containers = max_stacks * max_stack
+                        else:
+                            loadable_containers = int(truck_state['remaining_floor_area'] / floor_area_per_container)
+
+                        # 🔍 デバッグ: 積載可能数
+                        if '6245' in product_code or demand['num_containers'] > 15:
+                            print(f"      計算結果: loadable_containers={loadable_containers}, demand['num_containers']={demand['num_containers']}")
+
+                        if loadable_containers >= demand['num_containers']:
+                            # ✅ 全量積載可能（段積み最適化により）
+                            if '6245' in product_code or demand['num_containers'] > 15:
+                                print(f"   ✅ {truck_state['truck_name']}に全量積載成功（段積み最適化）")
+
+                            # 積載可能数量を計算
+                            capacity = demand.get('capacity', 1)
+                            loadable_quantity = demand['total_quantity']
+                            loadable_containers_actual = demand['num_containers']
+
+                            # 底面積を再計算
+                            if max_stack > 1 and is_stackable:
+                                stacked = (loadable_containers_actual + max_stack - 1) // max_stack
+                                loadable_floor_area = floor_area_per_container * stacked
+                            else:
+                                loadable_floor_area = floor_area_per_container * loadable_containers_actual
+
+                            # 全量積載
+                            truck_state['loaded_items'].append({
+                                'product_id': demand['product_id'],
+                                'product_code': demand['product_code'],
+                                'product_name': demand['product_name'],
+                                'container_id': demand['container_id'],
+                                'container_name': demand.get('container_name', '不明'),
+                                'num_containers': loadable_containers_actual,
+                                'total_quantity': loadable_quantity,
+                                'delivery_date': demand['delivery_date'],
+                                'floor_area': loadable_floor_area
+                            })
+                            truck_state['remaining_floor_area'] -= loadable_floor_area
+
+                            # 全量積載完了をマーク
+                            demand['num_containers'] = 0
+                            demand['total_quantity'] = 0
+                            demand['floor_area'] = 0
+                            loaded = True
+                            break
+
+                        elif loadable_containers > 0 and loadable_containers < demand['num_containers']:
+                            # 🔍 デバッグ: 分割積載
+                            if '6245' in product_code or demand['num_containers'] > 15:
+                                print(f"   🔀 {truck_state['truck_name']}に分割積載: {loadable_containers}ケース（残り{demand['num_containers'] - loadable_containers}ケース）")
+
+                            # 積載可能数量を計算
+                            capacity = demand.get('capacity', 1)
+                            loadable_quantity = min(loadable_containers * capacity, demand['total_quantity'])
+
+                            # 底面積を再計算
+                            if max_stack > 1 and is_stackable:
+                                stacked = (loadable_containers + max_stack - 1) // max_stack
+                                loadable_floor_area = floor_area_per_container * stacked
+                            else:
+                                loadable_floor_area = floor_area_per_container * loadable_containers
+
+                            # 分割して積載
+                            truck_state['loaded_items'].append({
+                                'product_id': demand['product_id'],
+                                'product_code': demand['product_code'],
+                                'product_name': demand['product_name'],
+                                'container_id': demand['container_id'],
+                                'container_name': demand.get('container_name', '不明'),
+                                'num_containers': loadable_containers,
+                                'total_quantity': loadable_quantity,
+                                'delivery_date': demand['delivery_date'],
+                                'floor_area': loadable_floor_area
+                            })
+                            truck_state['remaining_floor_area'] -= loadable_floor_area
+
+                            # 残りを更新
+                            demand['num_containers'] -= loadable_containers
+                            demand['total_quantity'] -= loadable_quantity
+                            demand['floor_area'] -= loadable_floor_area
+                            # 次のトラックで継続
+
+            # 最終チェック：残りがある場合は積み残し
+            if demand['num_containers'] > 0:
+                # 🔍 デバッグ: 積み残し
+                if '6245' in product_code or demand['num_containers'] > 15:
+                    print(f"   ❌ 積み残し: {demand['num_containers']}ケース")
+                    print(f"      理由: 全てのトラックに積載を試みたが、残りが積載できなかった")
+
                 remaining_demands.append(demand)
-                warnings.append(f"製品 {demand['product_code']} が積載できませんでした")
+                warnings.append(f"製品 {demand['product_code']} ({demand['num_containers']}ケース) が積載できませんでした")
+            elif '6245' in product_code or loaded:
+                # 🔍 デバッグ: 全量積載完了
+                if '6245' in product_code:
+                    print(f"   ✅ 全量積載完了（複数トラックに分割積載）")
 
         # 結果整形
         trucks_result = []
