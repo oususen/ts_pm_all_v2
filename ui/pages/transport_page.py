@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 from typing import Dict
 from ui.components.forms import FormComponents
+from ui.components.date_inputs import quick_date_input
 from ui.components.tables import TableComponents
 from services.transport_service import TransportService
 import io
@@ -75,17 +76,17 @@ class TransportPage:
         col1, col2 = st.columns(2)
         
         with col1:
-            start_date = st.date_input(
+            start_date = quick_date_input(
                 "開始日",
+                key="inspection_start_date",
                 value=date.today() - timedelta(days=3),
-                key="inspection_start_date"
             )
         
         with col2:
-            end_date = st.date_input(
+            end_date = quick_date_input(
                 "終了日",
+                key="inspection_end_date",
                 value=date.today() + timedelta(days=14),
-                key="inspection_end_date"
             )
         
         # データ取得
@@ -220,20 +221,22 @@ class TransportPage:
         col1, col2 = st.columns(2)
         
         with col1:
-            start_date = st.date_input(
+            start_date = quick_date_input(
                 "計画開始日",
-                value=date.today() - timedelta(days=30),
-                min_value=date.today() - timedelta(days=30),
-                help="積載計画の開始日（納期の最も早い日付を含めてください）"
+                key="loading_plan_start_date",
+                value=date.today() - timedelta(days=3),
+                min_value=date.today() - timedelta(days=3),
+                help="積載計画の開始日（納期の最も早い日付を含めてください）",
             )
         
         with col2:
             # ✅ 修正: 計画日数 → 計画終了日
-            end_date = st.date_input(
+            end_date = quick_date_input(
                 "計画終了日",
+                key="loading_plan_end_date",
                 value=date.today() + timedelta(days=10),  # デフォルト: 10日後
                 min_value=start_date,
-                help="積載計画の終了日を指定してください"
+                help="積載計画の終了日を指定してください",
             )
         
         # ✅ 日数を自動計算
