@@ -33,27 +33,69 @@ def register_japanese_fonts() -> None:
     ReportLab で日本語を扱えるようにフォントを登録する。
 
     Windows環境ではMSゴシックまたはメイリオ、
-    その他の環境ではヒラギノやTakaoPゴシックを使用する。
+    Linux環境ではNoto Sans JP、IPAゴシック、TakaoPゴシック、
+    Mac環境ではヒラギノを使用する。
     既に登録済みの場合は何もしない。
     """
     if "MSGothic" in pdfmetrics.getRegisteredFontNames():
         return
 
-    if os.name == "nt":
-        candidates: Sequence[Path] = (
-            Path("C:/Windows/Fonts/msgothic.ttc"),
-            Path("C:/Windows/Fonts/meiryo.ttc"),
-        )
-    else:
-        candidates = (
-            Path("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"),
-            Path("/System/Library/Fonts/ヒラギノ角ゴシック ProN W3.otf"),
-            Path("/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf"),
-        )
+    # Windowsフォント候補
+    windows_fonts = [
+        Path("C:/Windows/Fonts/msgothic.ttc"),
+        Path("C:/Windows/Fonts/meiryo.ttc"),
+        Path("C:/Windows/Fonts/msmincho.ttc"),
+        Path("C:/Windows/Fonts/yugothic.ttf"),
+    ]
 
+    # Linuxフォント候補（Docker/Ubuntu用）
+    linux_fonts = [
+        # Noto Sans JP（推奨）
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+        # IPA ゴシック
+        Path("/usr/share/fonts/truetype/fonts-japanese-gothic.ttf"),
+        Path("/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf"),
+        Path("/usr/share/fonts/truetype/ipafont/ipag.ttf"),
+        # Takao ゴシック
+        Path("/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf"),
+    ]
+
+    # Macフォント候補
+    mac_fonts = [
+        Path("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"),
+        Path("/System/Library/Fonts/ヒラギノ角ゴシック ProN W3.otf"),
+        Path("/Library/Fonts/ヒラギノ角ゴ ProN W3.otc"),
+    ]
+
+    # OSに応じて候補を選択
+    if os.name == "nt":
+        candidates: Sequence[Path] = windows_fonts
+    elif os.uname().sysname == "Darwin":
+        candidates = mac_fonts
+    else:
+        candidates = linux_fonts
+
+    # 全候補を順番に試す（OSの候補が見つからない場合は全環境の候補を試す）
     font_path = next((p for p in candidates if p.exists()), None)
+
+    # 見つからなかった場合、全環境の候補を試す
     if font_path is None:
-        raise FileNotFoundError("日本語フォント（MS ゴシック／メイリオ 等）が見つかりません。")
+        all_candidates = windows_fonts + linux_fonts + mac_fonts
+        font_path = next((p for p in all_candidates if p.exists()), None)
+
+    if font_path is None:
+        error_msg = (
+            "日本語フォントが見つかりません。\n\n"
+            "Dockerコンテナの場合は、以下のコマンドでフォントをインストールしてください:\n"
+            "  apt-get update && apt-get install -y fonts-noto-cjk fonts-ipafont-gothic\n\n"
+            "Windowsの場合は、システムフォントが正しくインストールされているか確認してください。\n"
+            "Linuxの場合は、以下のいずれかをインストールしてください:\n"
+            "  - fonts-noto-cjk (推奨)\n"
+            "  - fonts-ipafont-gothic\n"
+            "  - fonts-takao-gothic"
+        )
+        raise FileNotFoundError(error_msg)
 
     pdfmetrics.registerFont(TTFont("MSGothic", str(font_path)))
     pdfmetrics.registerFont(TTFont("MSGothic-Bold", str(font_path)))
