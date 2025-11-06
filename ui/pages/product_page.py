@@ -567,7 +567,8 @@ class ProductPage:
             # 新規登録フォーム
             st.subheader("➕ 新規製品群登録")
             with st.form("new_product_group_form", clear_on_submit=True):
-                col1, col2, col3, col4 = st.columns([1.5, 1.5, 3, 1])
+                st.write("**📋 基本情報**")
+                col1, col2, col3 = st.columns(3)
 
                 with col1:
                     new_group_code = st.text_input(
@@ -590,9 +591,86 @@ class ProductPage:
                         help="製品群の説明（省略可）"
                     )
 
-                with col4:
-                    st.write("")  # スペース調整
-                    submitted = st.form_submit_button("💾 登録", type="primary", use_container_width=True, disabled=not can_edit)
+                st.markdown("---")
+
+                # 機能有効化設定
+                st.write("**⚙️ 機能設定**")
+                col_func1, col_func2, col_func3, col_func4 = st.columns(4)
+
+                with col_func1:
+                    new_enable_container = st.checkbox(
+                        "容器管理",
+                        value=True,
+                        help="容器管理機能を有効化"
+                    )
+
+                with col_func2:
+                    new_enable_transport = st.checkbox(
+                        "輸送計画",
+                        value=True,
+                        help="輸送計画機能を有効化"
+                    )
+
+                with col_func3:
+                    new_enable_progress = st.checkbox(
+                        "進捗管理",
+                        value=True,
+                        help="進捗管理機能を有効化"
+                    )
+
+                with col_func4:
+                    new_enable_inventory = st.checkbox(
+                        "在庫管理",
+                        value=False,
+                        help="在庫管理機能を有効化"
+                    )
+
+                st.markdown("---")
+
+                # デフォルト値設定
+                st.write("**🎯 デフォルト設定**")
+                col_def1, col_def2, col_def3, col_def4 = st.columns(4)
+
+                with col_def1:
+                    new_default_lead_time = st.number_input(
+                        "デフォルトリードタイム(日)",
+                        value=2,
+                        min_value=0,
+                        max_value=30,
+                        step=1,
+                        help="この製品群のデフォルトリードタイム"
+                    )
+
+                with col_def2:
+                    new_default_priority = st.number_input(
+                        "デフォルト優先度",
+                        value=5,
+                        min_value=1,
+                        max_value=10,
+                        step=1,
+                        help="優先度（1:最高 〜 10:最低）"
+                    )
+
+                with col_def3:
+                    new_display_order = st.number_input(
+                        "表示順序",
+                        value=0,
+                        min_value=0,
+                        max_value=999,
+                        step=1,
+                        help="小さいほど上に表示されます"
+                    )
+
+                with col_def4:
+                    new_is_active = st.checkbox(
+                        "有効",
+                        value=True,
+                        help="無効にすると一覧に表示されなくなります"
+                    )
+
+                st.markdown("---")
+
+                submitted = st.form_submit_button("💾 登録", type="primary", use_container_width=True, disabled=not can_edit)
 
                 if submitted:
                     if not new_group_code or not new_group_code.strip():
@@ -604,7 +682,15 @@ class ProductPage:
                         success = self.production_service.create_product_group({
                             'group_code': new_group_code.strip(),
                             'group_name': new_group_name.strip(),
-                            'description': new_description.strip() if new_description else None
+                            'description': new_description.strip() if new_description else None,
+                            'enable_container_management': new_enable_container,
+                            'enable_transport_planning': new_enable_transport,
+                            'enable_progress_tracking': new_enable_progress,
+                            'enable_inventory_management': new_enable_inventory,
+                            'default_lead_time_days': new_default_lead_time,
+                            'default_priority': new_default_priority,
+                            'display_order': new_display_order,
+                            'is_active': new_is_active
                         })
 
                         if success:
@@ -628,17 +714,33 @@ class ProductPage:
                     group_name = group['group_name']
                     description = group.get('description', '') or ''
 
-                    with st.expander(f"🏷️ {group_name} (CODE: {group_code}, ID: {group_id})"):
-                        col_info1, col_info2 = st.columns(2)
+                    # アクティブ状態を取得
+                    is_active = bool(group.get('is_active', True))
+                    display_order = int(group.get('display_order', 0))
+
+                    # ステータスマークを追加
+                    status_mark = "✅" if is_active else "❌"
+
+                    with st.expander(f"{status_mark} {group_name} (CODE: {group_code}, ID: {group_id})"):
+                        # 基本情報表示
+                        col_info1, col_info2, col_info3 = st.columns(3)
                         with col_info1:
                             st.write(f"**GROUP_CODE:** {group_code if group_code else '（なし）'}")
-                        with col_info2:
                             st.write(f"**説明:** {description if description else '（なし）'}")
+                        with col_info2:
+                            st.write(f"**有効/無効:** {'✅ 有効' if is_active else '❌ 無効'}")
+                            st.write(f"**表示順序:** {display_order}")
+                            st.write(f"**製品数:** {group.get('product_count', 0)}件")
+                        with col_info3:
+                            st.write(f"**デフォルトリードタイム:** {group.get('default_lead_time_days', 2)}日")
+                            st.write(f"**デフォルト優先度:** {group.get('default_priority', 5)}")
 
                         # 編集フォーム
                         with st.form(f"edit_group_form_{group_id}"):
                             st.write("**✏️ 製品群情報を編集**")
 
+                            # 基本情報
+                            st.write("**📋 基本情報**")
                             col_edit1, col_edit2, col_edit3 = st.columns(3)
 
                             with col_edit1:
@@ -662,6 +764,93 @@ class ProductPage:
                                     key=f"desc_{group_id}"
                                 )
 
+                            st.markdown("---")
+
+                            # 機能有効化設定
+                            st.write("**⚙️ 機能設定**")
+                            col_func1, col_func2, col_func3, col_func4 = st.columns(4)
+
+                            with col_func1:
+                                enable_container = st.checkbox(
+                                    "容器管理",
+                                    value=bool(group.get('enable_container_management', True)),
+                                    key=f"container_{group_id}",
+                                    help="容器管理機能を有効化"
+                                )
+
+                            with col_func2:
+                                enable_transport = st.checkbox(
+                                    "輸送計画",
+                                    value=bool(group.get('enable_transport_planning', True)),
+                                    key=f"transport_{group_id}",
+                                    help="輸送計画機能を有効化"
+                                )
+
+                            with col_func3:
+                                enable_progress = st.checkbox(
+                                    "進捗管理",
+                                    value=bool(group.get('enable_progress_tracking', True)),
+                                    key=f"progress_{group_id}",
+                                    help="進捗管理機能を有効化"
+                                )
+
+                            with col_func4:
+                                enable_inventory = st.checkbox(
+                                    "在庫管理",
+                                    value=bool(group.get('enable_inventory_management', False)),
+                                    key=f"inventory_{group_id}",
+                                    help="在庫管理機能を有効化"
+                                )
+
+                            st.markdown("---")
+
+                            # デフォルト値設定
+                            st.write("**🎯 デフォルト設定**")
+                            col_def1, col_def2, col_def3, col_def4 = st.columns(4)
+
+                            with col_def1:
+                                default_lead_time = st.number_input(
+                                    "デフォルトリードタイム(日)",
+                                    value=int(group.get('default_lead_time_days', 2)),
+                                    min_value=0,
+                                    max_value=30,
+                                    step=1,
+                                    key=f"lead_{group_id}",
+                                    help="この製品群のデフォルトリードタイム"
+                                )
+
+                            with col_def2:
+                                default_priority = st.number_input(
+                                    "デフォルト優先度",
+                                    value=int(group.get('default_priority', 5)),
+                                    min_value=1,
+                                    max_value=10,
+                                    step=1,
+                                    key=f"priority_{group_id}",
+                                    help="優先度（1:最高 〜 10:最低）"
+                                )
+
+                            with col_def3:
+                                updated_display_order = st.number_input(
+                                    "表示順序",
+                                    value=display_order,
+                                    min_value=0,
+                                    max_value=999,
+                                    step=1,
+                                    key=f"order_{group_id}",
+                                    help="小さいほど上に表示されます"
+                                )
+
+                            with col_def4:
+                                updated_is_active = st.checkbox(
+                                    "有効",
+                                    value=is_active,
+                                    key=f"active_{group_id}",
+                                    help="無効にすると一覧に表示されなくなります"
+                                )
+
+                            st.markdown("---")
+
                             update_submitted = st.form_submit_button("💾 更新", type="primary", disabled=not can_edit)
 
                             if update_submitted:
@@ -673,7 +862,15 @@ class ProductPage:
                                     update_data = {
                                         'group_code': updated_code.strip(),
                                         'group_name': updated_name.strip(),
-                                        'description': updated_description.strip() if updated_description else None
+                                        'description': updated_description.strip() if updated_description else None,
+                                        'enable_container_management': enable_container,
+                                        'enable_transport_planning': enable_transport,
+                                        'enable_progress_tracking': enable_progress,
+                                        'enable_inventory_management': enable_inventory,
+                                        'default_lead_time_days': default_lead_time,
+                                        'default_priority': default_priority,
+                                        'display_order': updated_display_order,
+                                        'is_active': updated_is_active
                                     }
 
                                     success = self.production_service.update_product_group(group_id, update_data)
