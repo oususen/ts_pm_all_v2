@@ -18,6 +18,22 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
+
+# PDF表示用の製品順と俗称（ユーザー指定）
+PRODUCT_DISPLAY_ORDER = [
+    ("YD40006245", "U-5 CAB"),
+    ("YD40006630", "U-5 CANOPY"),
+    ("YD40006237", "55UR CAB"),
+    ("YD40006618", "55UR CANOPY"),
+    ("YD40006842", "5T-EN CAB"),
+    ("YD40007003", "3T-EN CAB"),
+    ("YD40007243", "U-5NA CAB"),
+    ("YD40007372", "U-5NA CANOPY"),
+    ("YD40007722", "KTEG"),
+    ("YD40007688", "55US"),
+    ("YD40002946", "30/40UR"),
+    ("5012775", None),
+]
 from reportlab.lib.units import mm
 from collections import defaultdict
 
@@ -122,7 +138,7 @@ class TieraTransportPage(TransportPage):
 
             # 横向きA4でドキュメント作成
             doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                                   topMargin=8*mm, bottomMargin=8*mm,
+                                   topMargin=8*mm, bottomMargin=4*mm,
                                    leftMargin=8*mm, rightMargin=8*mm)
             elements = []
             styles = getSampleStyleSheet()
@@ -201,7 +217,7 @@ class TieraTransportPage(TransportPage):
                 # テーブル作成（列幅を動的に計算）
                 # A4横向きの有効幅 ≈ 280mm
                 available_width = 280 * mm
-                product_col_width = 50 * mm  # 製品コード列
+                product_col_width = 70 * mm  # 製品コード列
                 date_cols_width = available_width - product_col_width
                 date_col_width = date_cols_width / len(dates_chunk)
 
@@ -277,10 +293,27 @@ class TieraTransportPage(TransportPage):
                     else:
                         morning_data[product_code][date_str] += quantity
 
-        # 製品コードをソート
-        sorted_products = sorted(all_products)
+        ordered_products = self._build_ordered_product_list(all_products)
 
-        return morning_data, evening_data, sorted_products
+        return morning_data, evening_data, ordered_products
+
+    def _build_ordered_product_list(self, products_found):
+        """
+        PDF表示用に製品コードの順序リストを作成する。
+        ユーザー指定の順序を優先し、それ以外の製品はコード順で末尾に追加。
+        """
+        ordered = []
+        seen_for_extra = set()
+
+        for code, alias in PRODUCT_DISPLAY_ORDER:
+            ordered.append((code, alias))
+            seen_for_extra.add(code)
+
+        for code in sorted(products_found):
+            if code not in seen_for_extra:
+                ordered.append((code, None))
+
+        return ordered
 
     def _create_production_table_data(self, dates, products, morning_data, evening_data):
         """生産課形式のテーブルデータを作成"""
@@ -293,7 +326,7 @@ class TieraTransportPage(TransportPage):
             try:
                 date_obj = datetime.strptime(date_str, '%Y-%m-%d')
                 weekday = ['月', '火', '水', '木', '金', '土', '日'][date_obj.weekday()]
-                date_display = f"{date_obj.month}/{date_obj.day}({weekday})"
+                date_display = f"{date_obj.month}/{date_obj.day}\n({weekday})"
             except:
                 date_display = date_str
             header_row.append(date_display)
@@ -303,8 +336,18 @@ class TieraTransportPage(TransportPage):
         row_info['morning_header_row'] = len(table_data)
         table_data.append(['午前便 AM 11:30頃'] + [''] * len(dates))
 
-        for idx, product_code in enumerate(products, 1):
-            row = [f'[{idx}]{product_code}']
+        base_codes_for_total = []
+        total_seen_codes = set()
+
+        for _, (product_code, alias) in enumerate(products, 1):
+            if product_code not in total_seen_codes:
+                base_codes_for_total.append(product_code)
+                total_seen_codes.add(product_code)
+
+            label = product_code
+            if alias:
+                label += f' ({alias})'
+            row = [label]
             for date_str in dates:
                 quantity = morning_data[product_code].get(date_str, 0)
                 row.append(str(quantity) if quantity > 0 else '')
@@ -314,7 +357,7 @@ class TieraTransportPage(TransportPage):
         row_info['morning_total_row'] = len(table_data)
         morning_total_row = ['午前便合計']
         for date_str in dates:
-            total = sum(morning_data[prod].get(date_str, 0) for prod in products)
+            total = sum(morning_data[prod].get(date_str, 0) for prod in base_codes_for_total)
             morning_total_row.append(str(total) if total > 0 else '')
         table_data.append(morning_total_row)
 
@@ -322,8 +365,11 @@ class TieraTransportPage(TransportPage):
         row_info['evening_header_row'] = len(table_data)
         table_data.append(['午後便 PM 18:30頃'] + [''] * len(dates))
 
-        for idx, product_code in enumerate(products, 1):
-            row = [f'[{idx}]{product_code}']
+        for _, (product_code, alias) in enumerate(products, 1):
+            label = product_code
+            if alias:
+                label += f' ({alias})'
+            row = [label]
             for date_str in dates:
                 quantity = evening_data[product_code].get(date_str, 0)
                 row.append(str(quantity) if quantity > 0 else '')
@@ -333,7 +379,7 @@ class TieraTransportPage(TransportPage):
         row_info['evening_total_row'] = len(table_data)
         evening_total_row = ['午後便合計']
         for date_str in dates:
-            total = sum(evening_data[prod].get(date_str, 0) for prod in products)
+            total = sum(evening_data[prod].get(date_str, 0) for prod in base_codes_for_total)
             evening_total_row.append(str(total) if total > 0 else '')
         table_data.append(evening_total_row)
 
@@ -341,8 +387,8 @@ class TieraTransportPage(TransportPage):
         row_info['grand_total_row'] = len(table_data)
         grand_total_row = ['出荷数合計']
         for date_str in dates:
-            morning_total = sum(morning_data[prod].get(date_str, 0) for prod in products)
-            evening_total = sum(evening_data[prod].get(date_str, 0) for prod in products)
+            morning_total = sum(morning_data[prod].get(date_str, 0) for prod in base_codes_for_total)
+            evening_total = sum(evening_data[prod].get(date_str, 0) for prod in base_codes_for_total)
             total = morning_total + evening_total
             grand_total_row.append(str(total) if total > 0 else '')
         table_data.append(grand_total_row)
