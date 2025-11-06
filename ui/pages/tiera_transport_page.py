@@ -113,6 +113,10 @@ class TieraTransportPage(TransportPage):
         縦軸：製品コード（朝便/夕便で分類）
         """
         try:
+            # ✅ 日本語フォントの登録（shipping_pdf_generatorの関数を使用）
+            from services.shipping_pdf_generator import register_japanese_fonts
+            register_japanese_fonts()
+
             # PDFバッファを作成
             buffer = io.BytesIO()
 
@@ -123,31 +127,11 @@ class TieraTransportPage(TransportPage):
             elements = []
             styles = getSampleStyleSheet()
 
-            # ✅ 日本語フォントの設定
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
-            from reportlab.lib.fonts import addMapping
-
-            # 日本語フォントの登録
-            try:
-                pdfmetrics.registerFont(TTFont('Japanese', 'C:/Windows/Fonts/msgothic.ttc'))
-                pdfmetrics.registerFont(TTFont('Japanese-Bold', 'C:/Windows/Fonts/msgothic.ttc'))
-            except:
-                try:
-                    pdfmetrics.registerFont(TTFont('Japanese', '/System/Library/Fonts/Arial Unicode.ttf'))
-                    pdfmetrics.registerFont(TTFont('Japanese-Bold', '/System/Library/Fonts/Arial Unicode.ttf'))
-                except:
-                    st.warning("日本語フォントが見つかりません")
-
-            # フォントマッピング
-            addMapping('Japanese', 0, 0, 'Japanese')
-            addMapping('Japanese', 1, 0, 'Japanese-Bold')
-
-            # タイトルスタイル
+            # タイトルスタイル（MSGothic-Boldを使用）
             japanese_title_style = styles['Heading1'].clone('JapaneseTitleStyle')
-            japanese_title_style.fontName = 'Japanese-Bold'
+            japanese_title_style.fontName = 'MSGothic-Bold'
             japanese_title_style.fontSize = 12
-            japanese_title_style.alignment = 0 #左揃え
+            japanese_title_style.alignment = 0  # 左揃え
 
             # データ整理
             daily_plans = plan_data.get('daily_plans', {})
@@ -369,7 +353,7 @@ class TieraTransportPage(TransportPage):
         """生産課形式のテーブルスタイルを作成（土日祝日の色分け含む）"""
         style = TableStyle([
             # 基本設定
-            ('FONTNAME', (0, 0), (-1, -1), 'Japanese'),
+            ('FONTNAME', (0, 0), (-1, -1), 'MSGothic'),
             ('FONTSIZE', (0, 0), (-1, -1), 13),  # 13ptに変更
             ('LEADING', (0, 0), (-1, -1), 14),  # 行間を14ポイントに
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -479,27 +463,27 @@ class TieraTransportPage(TransportPage):
 
         # 特殊行のスタイル
         # 午前便ヘッダー
-        style.add('FONTNAME', (0, morning_header), (-1, morning_header), 'Japanese-Bold')
+        style.add('FONTNAME', (0, morning_header), (-1, morning_header), 'MSGothic-Bold')
         style.add('ALIGN', (0, morning_header), (0, morning_header), 'LEFT')
         style.add('BACKGROUND', (0, morning_header), (-1, morning_header), colors.lightblue)
 
         # 午前便合計行
-        style.add('FONTNAME', (0, morning_total), (-1, morning_total), 'Japanese-Bold')
+        style.add('FONTNAME', (0, morning_total), (-1, morning_total), 'MSGothic-Bold')
         style.add('BACKGROUND', (0, morning_total), (-1, morning_total), colors.lightyellow)
-        
+
 
         # 午後便ヘッダー（青色）
-        style.add('FONTNAME', (0, evening_header), (-1, evening_header), 'Japanese-Bold')
+        style.add('FONTNAME', (0, evening_header), (-1, evening_header), 'MSGothic-Bold')
         style.add('ALIGN', (0, evening_header), (0, evening_header), 'LEFT')
         style.add('BACKGROUND', (0, evening_header), (-1, evening_header), colors.lightblue)
 
         # 午後便合計行
-        style.add('FONTNAME', (0, evening_total), (-1, evening_total), 'Japanese-Bold')
+        style.add('FONTNAME', (0, evening_total), (-1, evening_total), 'MSGothic-Bold')
         style.add('BACKGROUND', (0, evening_total), (-1, evening_total), colors.lightyellow)
 
         # 出荷数合計行
         style.add('BACKGROUND', (0, row_info['grand_total_row']), (0, row_info['grand_total_row']), colors.orange)
-        style.add('FONTNAME', (0, row_info['grand_total_row']), (-1, row_info['grand_total_row']), 'Japanese-Bold')
+        style.add('FONTNAME', (0, row_info['grand_total_row']), (-1, row_info['grand_total_row']), 'MSGothic-Bold')
         style.add('BACKGROUND', (0, row_info['grand_total_row']), (-1, row_info['grand_total_row']), colors.orange)
 
         return style
