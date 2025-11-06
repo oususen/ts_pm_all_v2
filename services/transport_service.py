@@ -1273,3 +1273,16 @@ class TransportService:
         for pid in product_ids:
             self.recompute_shipped_remaining(pid, start_date, end_date)
 
+    def reset_planned_quantity_for_period(self, start_date: date, end_date: date) -> int:
+        """
+        指定期間の計画数量（planned_quantity）を0にリセット
+
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+
+        Returns:
+            int: 更新されたレコード数
+        """
+        return self.delivery_progress_repo.reset_planned_quantity_for_period(start_date, end_date)
+

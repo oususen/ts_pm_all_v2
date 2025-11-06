@@ -451,3 +451,43 @@ class DeliveryProgressRepository:
             return {}
         finally:
             session.close()
+
+    def reset_planned_quantity_for_period(self, start_date: date, end_date: date) -> int:
+        """
+        指定期間の計画数量（planned_quantity）を0にリセット
+
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+
+        Returns:
+            int: 更新されたレコード数
+        """
+        session = self.db.get_session()
+
+        try:
+            query = text("""
+                UPDATE delivery_progress
+                SET planned_quantity = 0
+                WHERE delivery_date BETWEEN :start_date AND :end_date
+                AND status != 'キャンセル'
+            """)
+
+            result = session.execute(query, {
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d')
+            })
+
+            session.commit()
+
+            updated_count = result.rowcount
+            print(f"✅ 計画数量をリセットしました: {updated_count}件 ({start_date} ～ {end_date})")
+
+            return updated_count
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            print(f"❌ 計画数量リセットエラー: {e}")
+            raise
+        finally:
+            session.close()

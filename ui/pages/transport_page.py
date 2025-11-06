@@ -244,12 +244,30 @@ class TransportPage:
         
         # 計画日数の表示
         st.info(f"📅 計画期間: **{days}日間** ({start_date.strftime('%Y年%m月%d日')} ～ {end_date.strftime('%Y年%m月%d日')})")
-   
+
         st.markdown("---")
+
+        # ✅ 計画数リセットオプション
+        reset_planned_qty = st.checkbox(
+            "🔄 期間内の既存計画数をリセットしてから作成",
+            value=False,
+            help="チェックすると、選択期間内の全製品の計画数量（planned_quantity）を0にリセットしてから新しい積載計画を作成します。",
+            disabled=not can_edit
+        )
+
+        if reset_planned_qty:
+            st.warning("⚠️ このオプションをONにすると、選択期間内の既存の計画数が全てクリアされます。")
 
         if st.button("🔄 積載計画を作成", type="primary", use_container_width=True, disabled=not can_edit):
             with st.spinner("積載計画を計算中..."):
                 try:
+                    # ✅ リセットオプションが有効な場合、期間内の計画数をリセット
+                    if reset_planned_qty:
+                        with st.spinner(f"期間内の計画数をリセット中... ({start_date} ～ {end_date})"):
+                            updated_count = self.service.reset_planned_quantity_for_period(start_date, end_date)
+                            st.info(f"✅ {updated_count}件の計画数をリセットしました")
+
+                    # 積載計画を作成
                     result = self.service.calculate_loading_plan_from_orders(
                         start_date=start_date,
                         days=days
