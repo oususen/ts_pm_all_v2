@@ -56,6 +56,7 @@ class CSVImportPage:
                 self._show_upload_form(tab_prefix="kakutei_")
 
             with tab3:
+                self.import_service = TieraCSVImportService(self.db_manager)
                 self._show_import_history()
 
             with tab4:
