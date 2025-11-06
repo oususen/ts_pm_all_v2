@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y \
     libmariadb-dev \
     curl \
     pkg-config \
-    fonts-noto-cjk \
     fonts-ipafont-gothic \
+    fonts-takao-gothic \
     && rm -rf /var/lib/apt/lists/*
 
 # requirements.txt をコピー

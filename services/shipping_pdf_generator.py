@@ -49,16 +49,18 @@ def register_japanese_fonts() -> None:
     ]
 
     # Linuxフォント候補（Docker/Ubuntu用）
+    # ReportLabはTrueTypeフォントのみサポート（PostScript outlinesは非サポート）
     linux_fonts = [
-        # Noto Sans JP（推奨）
-        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
-        Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
-        # IPA ゴシック
+        # IPA ゴシック（TrueType - 推奨）
         Path("/usr/share/fonts/truetype/fonts-japanese-gothic.ttf"),
         Path("/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf"),
         Path("/usr/share/fonts/truetype/ipafont/ipag.ttf"),
-        # Takao ゴシック
+        Path("/usr/share/fonts/truetype/ipafont-gothic/ipag.ttf"),
+        # Takao ゴシック（TrueType）
         Path("/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf"),
+        # Noto Sans CJK JP（TrueType版があれば）
+        Path("/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Regular.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansCJK-jp-Regular.otf"),
     ]
 
     # Macフォント候補
@@ -76,29 +78,43 @@ def register_japanese_fonts() -> None:
     else:
         candidates = linux_fonts
 
-    # 全候補を順番に試す（OSの候補が見つからない場合は全環境の候補を試す）
-    font_path = next((p for p in candidates if p.exists()), None)
+    # 全候補を順番に試す（見つからない場合は全環境の候補も試す）
+    all_candidates = list(candidates) + [p for p in (windows_fonts + linux_fonts + mac_fonts) if p not in candidates]
 
-    # 見つからなかった場合、全環境の候補を試す
-    if font_path is None:
-        all_candidates = windows_fonts + linux_fonts + mac_fonts
-        font_path = next((p for p in all_candidates if p.exists()), None)
+    # 各フォントを試して、最初に成功したものを使用
+    font_registered = False
+    last_error = None
 
-    if font_path is None:
+    for font_path in all_candidates:
+        if not font_path.exists():
+            continue
+
+        try:
+            # フォント登録を試みる
+            pdfmetrics.registerFont(TTFont("MSGothic", str(font_path)))
+            pdfmetrics.registerFont(TTFont("MSGothic-Bold", str(font_path)))
+            font_registered = True
+            print(f"✅ 日本語フォントを登録しました: {font_path}")
+            break
+        except Exception as e:
+            # このフォントは使えないので次を試す
+            last_error = e
+            print(f"⚠️ フォント読み込みエラー（次を試します）: {font_path} - {str(e)[:100]}")
+            continue
+
+    if not font_registered:
         error_msg = (
-            "日本語フォントが見つかりません。\n\n"
+            "日本語フォントが見つからないか、読み込みに失敗しました。\n\n"
             "Dockerコンテナの場合は、以下のコマンドでフォントをインストールしてください:\n"
-            "  apt-get update && apt-get install -y fonts-noto-cjk fonts-ipafont-gothic\n\n"
+            "  apt-get update && apt-get install -y fonts-ipafont-gothic fonts-takao-gothic\n\n"
             "Windowsの場合は、システムフォントが正しくインストールされているか確認してください。\n"
             "Linuxの場合は、以下のいずれかをインストールしてください:\n"
-            "  - fonts-noto-cjk (推奨)\n"
-            "  - fonts-ipafont-gothic\n"
-            "  - fonts-takao-gothic"
+            "  - fonts-ipafont-gothic (推奨)\n"
+            "  - fonts-takao-gothic\n\n"
         )
+        if last_error:
+            error_msg += f"最後のエラー: {str(last_error)}"
         raise FileNotFoundError(error_msg)
-
-    pdfmetrics.registerFont(TTFont("MSGothic", str(font_path)))
-    pdfmetrics.registerFont(TTFont("MSGothic-Bold", str(font_path)))
 
 
 def format_japanese_date(target_date: Union[date, datetime]) -> str:
