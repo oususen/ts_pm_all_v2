@@ -377,22 +377,31 @@ class TieraCSVImportService:
             session.close()
 
     def _parse_date(self, date_str: str):
-        """日付文字列をパース（YYYYMMDD形式）"""
-        if not date_str or date_str == '':
+        """納期文字列をパース（YYYYMMDD / YYYY/MM/DD / YYYY-MM-DD形式）"""
+        if not date_str:
             return None
 
-        try:
-            # YYYYMMDD形式（例: 20251106）
-            if len(date_str) == 8 and date_str.isdigit():
-                year = int(date_str[0:4])
-                month = int(date_str[4:6])
-                day = int(date_str[6:8])
+        value = str(date_str).strip()
+        if not value:
+            return None
+
+        for fmt in ("%Y%m%d", "%Y/%m/%d", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+
+        digits_only = "".join(ch for ch in value if ch.isdigit())
+        if len(digits_only) == 8:
+            try:
+                year = int(digits_only[0:4])
+                month = int(digits_only[4:6])
+                day = int(digits_only[6:8])
                 return datetime(year, month, day).date()
+            except ValueError:
+                return None
 
-            return None
-
-        except Exception:
-            return None
+        return None
 
     def get_import_history(self) -> List[Dict]:
         """インポート履歴を取得"""

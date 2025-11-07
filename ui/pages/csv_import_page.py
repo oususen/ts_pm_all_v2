@@ -5,6 +5,7 @@ from datetime import datetime, date, timedelta
 from services.csv_import_service import CSVImportService
 from services.tiera_csv_import_service import TieraCSVImportService
 from services.tiera_kakutei_csv_import_service import TieraKakuteiCSVImportService
+from services.tiera_riden_csv_import_service import TieraRidenCSVImportService
 from services.kubota_kakutei_csv_import_service import KubotaKakuteiCSVImportService
 from services.transport_service import TransportService
 
@@ -33,7 +34,7 @@ class CSVImportPage:
 
         # 現在の顧客を取得
         customer = st.session_state.get('current_customer', 'kubota')
-        customer_display = "久保田様" if customer == "kubota" else "ティエラ様"
+        customer_display = "クボタ様" if customer == "kubota" else "ティエラ様"
 
         # 顧客情報を表示
         st.info(f"📋 現在の顧客: **{customer_display}**")
@@ -41,25 +42,37 @@ class CSVImportPage:
 
         # ティエラ様の場合は、内示CSVと確定CSVの2つのタブを表示
         if customer == 'tiera':
-            tab1, tab2, tab3, tab4 = st.tabs(["📋 内示CSVインポート", "✅ 確定CSVインポート", "📊 インポート履歴", "ℹ️ 使い方"])
+            tab_naiji, tab_kakutei, tab_riden, tab_history, tab_docs = st.tabs([
+                "📋 内示CSVインポート",
+                "✅ 確定CSVインポート",
+                "📦 リーデン注文書",
+                "📊 インポート履歴",
+                "ℹ️ 使い方"
+            ])
 
-            with tab1:
+            with tab_naiji:
                 self.import_service = TieraCSVImportService(self.db_manager)
                 st.subheader("📋 内示CSV（B17形式）")
                 st.caption("フォーマット: 列6=図番、列8=納期、列11=数量、CP932")
                 self._show_upload_form(tab_prefix="naiji_")
 
-            with tab2:
+            with tab_kakutei:
                 self.import_service = TieraKakuteiCSVImportService(self.db_manager)
                 st.subheader("✅ 確定CSV（Y55形式）")
                 st.caption("フォーマット: 列11=図番、列13=納期、列16=数量、CP932")
                 self._show_upload_form(tab_prefix="kakutei_")
 
-            with tab3:
+            with tab_riden:
+                self.import_service = TieraRidenCSVImportService(self.db_manager)
+                st.subheader("📦 リーデン注文書（ティエラ・確定受注）")
+                st.caption("フォーマット: 品目コード（列6）/ 納期（列10：YYYY/MM/DD）/ 発注数量（列11）、CP932／確定受注として登録します")
+                self._show_upload_form(tab_prefix="riden_")
+
+            with tab_history:
                 self.import_service = TieraCSVImportService(self.db_manager)
                 self._show_import_history()
 
-            with tab4:
+            with tab_docs:
                 self._show_instructions()
 
         else:
@@ -130,14 +143,16 @@ class CSVImportPage:
         elif customer == 'tiera':
             st.info("""
             **対応フォーマット（ティエラ様）:**
-            - エンコーディング: CP932
-            - 必須列: 図番（列6）、納期（列8：YYYYMMDD）、数量（列11）
-            - 品名: 列12（日本語）、列13（英語）
+            - エンコーディング: CP932（共通）
+            - 内示CSV: 列6=図番、列8=納期（YYYYMMDD）、列11=数量
+            - 確定CSV: 列11=図番、列13=納期、列16=数量
+            - リーデン注文書: 品目コード（列6）/ 納期（列10：YYYY/MM/DD）/ 発注数量（列11）※確定受注データ
 
             **インポート仕様:**
             - 図番×納期でグループ化して集計されます
             - 既存データに追加されます
             - 同じ図番×納期のデータは数量が更新されます
+            - リーデン注文書は order_type=確定 として登録されます
             """)
         with st.expander("計画進度の再計算"):
             product_id = st.number_input("製品ID", min_value=1, step=1, key=f"{tab_prefix}recalc_product_id_upload")
