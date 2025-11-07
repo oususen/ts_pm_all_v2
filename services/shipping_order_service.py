@@ -273,6 +273,8 @@ class ShippingOrderService:
                     'containers': total_containers
                 })
 
+        order = {'SIGA': 0, 'KANTATSU': 1}
+        annotations.sort(key=lambda ann: order.get(ann.get('group_code', '').upper(), 99))
         return annotations
 
     def get_available_dates(self) -> List[date]:

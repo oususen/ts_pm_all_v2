@@ -28,6 +28,10 @@ COLOR_BOX_BORDER = colors.HexColor("#6b6b6b")
 COLOR_BOX_EMPTY = colors.HexColor("#f5f5f5")
 COLOR_RIDEN_PINK = colors.HexColor("#f7b7d2")
 
+BOX_GAP = 2.5 * mm
+BOX_ROW_HEIGHT = 28 * mm
+BOX_ROW_SPACING = 6  # points
+
 
 def register_japanese_fonts() -> None:
     """
@@ -670,8 +674,8 @@ def draw_product_boxes(
             canv.restoreState()
         return y - 24
 
-    gap = 2.5 * mm
-    row_height = 28 * mm
+    gap = BOX_GAP
+    row_height = BOX_ROW_HEIGHT
     current_y = y
 
     for row_items in chunked(items, columns):
@@ -690,9 +694,9 @@ def draw_product_boxes(
                 height=row_height,
                 item=item,
             )
-        current_y -= row_height + 6
+        current_y -= row_height + BOX_ROW_SPACING
 
-    return current_y + 6
+    return current_y + BOX_ROW_SPACING
 
 
 def draw_trip2_special_box(
@@ -702,29 +706,33 @@ def draw_trip2_special_box(
     width: float,
     row_top: float,
     columns: int,
-) -> None:
+    has_main_row: bool,
+) -> float:
     """
     2便目特記事項（SIGA/KANTATSU）を所定位置に描画
     """
     if not annotations:
         return
 
-    gap = 2.5 * mm
-    row_height = 28 * mm
+    gap = BOX_GAP
+    row_height = BOX_ROW_HEIGHT
     box_width = (width - gap * (columns - 1)) / columns
-    box_x = x + (columns - 1) * (box_width + gap)
-    row2_top = row_top - (row_height + 6)
 
-    display_names = {
-        "SIGA": "リーデン 滋賀",
-        "KANTATSU": "リーデン 神立",
-    }
     display_locations = {
         "SIGA": "滋賀",
         "KANTATSU": "神立",
     }
-    lines: List[str] = []
-    for idx, ann in enumerate(annotations):
+
+    order = {"SIGA": 0, "KANTATSU": 1}
+    sorted_annotations = sorted(
+        annotations,
+        key=lambda ann: order.get((ann.get("group_code") or "").upper(), 99),
+    )
+
+    col_idx = columns - 1
+    row_idx = 1 if has_main_row else 0
+    rows_used = 0
+    for ann in sorted_annotations:
         group_code = ann.get("group_code", "")
         containers = ann.get("containers") or 0
         try:
@@ -734,28 +742,38 @@ def draw_trip2_special_box(
         containers = max(1, containers)
 
         location = display_locations.get(group_code, group_code or "")
+        text_lines = ["リーデン"]
+        second_line = location or group_code or ""
+        if second_line:
+            text_lines.append(second_line)
+        text_lines.append(f"{containers}容器")
 
-        lines.append("リーデン")
-        if location:
-            lines.append(location)
-        lines.append(f"{containers}容器")
+        if col_idx < 0:
+            col_idx = columns - 1
+            row_idx += 1
 
-        if idx < len(annotations) - 1:
-            lines.append("")
+        box_x = x + col_idx * (box_width + gap)
+        row_top_position = row_top - row_idx * (row_height + BOX_ROW_SPACING)
 
-    filtered_lines = [line for line in lines if line or len(lines) == 1]
-    draw_product_box(
-        canv=canv,
-        x=box_x,
-        y=row2_top,
-        width=box_width,
-        height=row_height,
-        item={
-            "text_lines": filtered_lines,
-            "quantity": None,
-            "color": COLOR_RIDEN_PINK,
-        },
-    )
+        draw_product_box(
+            canv=canv,
+            x=box_x,
+            y=row_top_position,
+            width=box_width,
+            height=row_height,
+            item={
+                "text_lines": text_lines,
+                "quantity": None,
+                "color": COLOR_RIDEN_PINK,
+            },
+        )
+
+        rows_used = max(rows_used, row_idx + 1)
+        col_idx -= 1
+
+    extra_rows = rows_used - (1 if has_main_row else 0)
+    extra_rows = max(0, extra_rows)
+    return extra_rows * (row_height + BOX_ROW_SPACING)
 
 
 def draw_trip_section(
@@ -813,6 +831,7 @@ def draw_trip_section(
 
     products_sorted = sorted(filtered, key=lambda p: str(p.get("product_code", "")))
     box_items = prepare_box_items(trip_no, products_sorted) if products_sorted else []
+    has_main_row = bool(box_items)
     box_area_top = current_y
 
     current_y = draw_product_boxes(
@@ -825,17 +844,19 @@ def draw_trip_section(
         show_empty_message=not (trip_no == "2" and special_annotations and not box_items),
     )
 
+    extra_height = 0
     if trip_no == "2" and special_annotations:
-        draw_trip2_special_box(
+        extra_height = draw_trip2_special_box(
             canv=canv,
             annotations=special_annotations,
             x=x,
             width=width,
             row_top=box_area_top,
             columns=columns,
+            has_main_row=has_main_row,
         )
 
-    return current_y - 8
+    return current_y - extra_height - 8
 
 
 def generate_shipping_order_pdf(
