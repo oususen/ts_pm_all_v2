@@ -394,7 +394,7 @@ class CSVImportPage:
         
         try:
             # 日付範囲を調整（当日～1ヶ月後）
-            today = date.today()-timedelta(days=30)
+            today = date.today()-timedelta(days=0)
             end_date = today + timedelta(days=30)
             
             # production_instructions_detailテーブルから直接検査区分を取得
@@ -422,10 +422,13 @@ class CSVImportPage:
             
             if rows:
                 st.warning("⚠️ 検査対象製品（F/$含む）が含まれています")
-                
+
                 df = pd.DataFrame(rows, columns=result.keys())
                 df['日付'] = pd.to_datetime(df['日付']).dt.date
-                
+
+                # 受注数が0でないレコードのみ表示
+                df = df[df['受注数'] > 0]
+
                 # 検査区分ごとの集計
                 f_products = df[df['検査区分'].str.contains('F', na=False)]
                 dollar_products = df[df['検査区分'].str.contains(r'\$', regex=True, na=False)]
@@ -450,7 +453,10 @@ class CSVImportPage:
                     '指示ID': 'count',
                     '受注数': 'sum'
                 }).rename(columns={'指示ID': '件数', '受注数': '総数量'}).reset_index()
-                
+
+                # 総数量が0でないレコードのみ表示
+                category_summary = category_summary[category_summary['総数量'] > 0]
+
                 st.dataframe(
                     category_summary,
                     use_container_width=True,
@@ -467,7 +473,10 @@ class CSVImportPage:
                     '指示ID': 'count',
                     '受注数': 'sum'
                 }).rename(columns={'指示ID': '件数', '受注数': '総数量'}).reset_index()
-                
+
+                # 総数量が0でないレコードのみ表示
+                daily_summary = daily_summary[daily_summary['総数量'] > 0]
+
                 st.dataframe(
                     daily_summary,
                     use_container_width=True,
@@ -485,7 +494,10 @@ class CSVImportPage:
                     '指示ID': 'count',
                     '受注数': 'sum'
                 }).rename(columns={'指示ID': '件数', '受注数': '総数量'}).reset_index()
-                
+
+                # 総数量が0でないレコードのみ表示
+                product_summary = product_summary[product_summary['総数量'] > 0]
+
                 st.dataframe(
                     product_summary,
                     use_container_width=True,

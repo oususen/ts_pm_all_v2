@@ -96,23 +96,24 @@ class TransportPage:
         
         try:
             query = text("""
-                SELECT 
-                    dp.delivery_date as 日付,
-                    dp.order_id as オーダーID,
+                SELECT
+                    pid.instruction_date as 日付,
+                    pid.order_number as オーダーID,
                     p.product_code as 製品コード,
                     p.product_name as 製品名,
-                    dp.order_quantity as 受注数,
-                    dp.planned_quantity as 計画数,
-                    dp.shipped_quantity as 出荷済,
-                    p.inspection_category as 検査区分,
-                    dp.customer_name as 得意先,
-                    dp.status as ステータス
-                FROM delivery_progress dp
-                LEFT JOIN products p ON dp.product_id = p.id
-                WHERE dp.delivery_date BETWEEN :start_date AND :end_date
-                    AND (p.inspection_category LIKE 'F%' OR p.inspection_category LIKE '%$%')
-                    AND dp.status != 'キャンセル'
-                ORDER BY dp.delivery_date, p.product_code
+                    pid.instruction_quantity as 受注数,
+                    pid.instruction_quantity as 計画数,
+                    0 as 出荷済,
+                    COALESCE(pid.inspection_category, p.inspection_category) as 検査区分,
+                    '' as 得意先,
+                    pid.order_type as ステータス
+                FROM production_instructions_detail pid
+                LEFT JOIN products p ON pid.product_id = p.id
+                WHERE pid.instruction_date BETWEEN :start_date AND :end_date
+                    AND (pid.inspection_category LIKE 'F%' OR pid.inspection_category LIKE '%$%'
+                         OR p.inspection_category LIKE 'F%' OR p.inspection_category LIKE '%$%')
+                    AND pid.order_type != 'キャンセル'
+                ORDER BY pid.instruction_date, p.product_code
             """)
             
             result = session.execute(query, {
@@ -154,7 +155,10 @@ class TransportPage:
                 
                 if inspection_filter:
                     df = df[df['検査区分'].isin(inspection_filter)]
-                
+
+                # 受注数が0でないレコードのみ表示
+                df = df[df['受注数'] > 0]
+
                 # データ表示
                 st.subheader("📋 注文詳細一覧")
                 st.dataframe(
@@ -165,7 +169,7 @@ class TransportPage:
                         "日付": st.column_config.DateColumn("日付", format="YYYY-MM-DD"),
                     }
                 )
-                
+
                 # 日付別集計
                 st.subheader("📅 日付別集計")
                 daily = df.groupby(['日付', '検査区分']).agg({
@@ -173,7 +177,10 @@ class TransportPage:
                     '受注数': 'sum'
                 }).reset_index()
                 daily.columns = ['日付', '検査区分', '注文件数', '合計数量']
-                
+
+                # 合計数量が0でないレコードのみ表示
+                daily = daily[daily['合計数量'] > 0]
+
                 st.dataframe(daily, use_container_width=True, hide_index=True)
                 
                 # CSV出力
