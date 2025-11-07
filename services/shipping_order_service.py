@@ -154,18 +154,82 @@ class ShippingOrderService:
 
     def _split_trip1_to_trip4(self, trip1_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        4便目: 1便目と同じ製品、数量を半分に分割
+        4便目: 1便目と同じ製品、容器数を均等に分割
+
+        全体の容器数を計算し、目標容器数に達するまで製品を1便目に割り当て、
+        残りを4便目に割り当てることで、容器数を均等に分配する
         """
-        trip4_data = []
+        if not trip1_data:
+            return []
+
+        # 各製品の容器数を計算
+        product_containers = []
+        total_containers = 0
+
         for item in trip1_data:
-            item_copy = item.copy()
-            original_qty = item_copy['order_quantity']
+            capacity = item.get('capacity', 1)
+            if capacity <= 0:
+                capacity = 1
 
-            # 数量を半分に（切り上げ/切り下げで調整）
-            item_copy['order_quantity'] = original_qty // 2
-            item['order_quantity'] = original_qty - item_copy['order_quantity']
+            qty = item['order_quantity']
+            containers = -(-qty // capacity)  # 切り上げ
+            total_containers += containers
 
-            trip4_data.append(item_copy)
+            product_containers.append({
+                'item': item,
+                'original_qty': qty,
+                'capacity': capacity,
+                'containers': containers
+            })
+
+        # 目標容器数を計算（1便目が多くなるように）
+        target_trip1_containers = -(-total_containers // 2)  # 切り上げ
+
+        # 1便目と4便目に振り分け
+        trip1_actual_containers = 0
+        trip4_data = []
+
+        for prod_info in product_containers:
+            item = prod_info['item']
+            original_qty = prod_info['original_qty']
+            capacity = prod_info['capacity']
+            containers = prod_info['containers']
+
+            # まだ1便目の目標に達していない場合
+            if trip1_actual_containers < target_trip1_containers:
+                # この製品を1便目に追加しても目標を超えない場合は全て1便目へ
+                if trip1_actual_containers + containers <= target_trip1_containers:
+                    # 1便目に全量
+                    item['order_quantity'] = original_qty
+                    # 4便目には0
+                    item_copy = item.copy()
+                    item_copy['order_quantity'] = 0
+                    trip4_data.append(item_copy)
+                    trip1_actual_containers += containers
+                else:
+                    # 1便目の目標まで割り当て、残りを4便目へ
+                    remaining_trip1_containers = target_trip1_containers - trip1_actual_containers
+
+                    # 1便目の個数を計算
+                    trip1_qty = remaining_trip1_containers * capacity
+                    trip1_qty = min(trip1_qty, original_qty)
+
+                    # 4便目は残り
+                    trip4_qty = original_qty - trip1_qty
+
+                    item['order_quantity'] = trip1_qty
+
+                    item_copy = item.copy()
+                    item_copy['order_quantity'] = trip4_qty
+                    trip4_data.append(item_copy)
+
+                    trip1_actual_containers += remaining_trip1_containers
+            else:
+                # 既に1便目の目標に達している場合は全て4便目へ
+                item['order_quantity'] = 0
+                item_copy = item.copy()
+                item_copy['order_quantity'] = original_qty
+                trip4_data.append(item_copy)
 
         return trip4_data
 
