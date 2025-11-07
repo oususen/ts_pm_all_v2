@@ -149,11 +149,18 @@ class ShippingOrderPage:
             )
 
         with tab2:
+            special_notes = data.get('trip2_special_annotations', [])
+            if special_notes:
+                info_text = " / ".join(
+                    f"{note['group_code']}: {note['containers']}容器"
+                    for note in special_notes
+                )
+                st.info(f"特記事項（2便目右端）：{info_text}")
             self._show_trip_data(
                 "2便目 - ブレード",
                 "06:30",
                 data['trip2'],
-                "機種名が [391, 17U, 20U, 26U, 19-6, 390, KOTEIKYAKU]"
+                "建機モデル [391, 17U, 20U, 26U, 19-6, 390, KOTEIKYAKU] ＋ 製品群 SIGA/KANTATSU"
             )
 
         with tab3:

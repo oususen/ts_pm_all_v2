@@ -8,7 +8,7 @@ import textwrap
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Sequence, Union
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -645,6 +645,7 @@ def draw_product_boxes(
     y: float,
     width: float,
     columns: int,
+    show_empty_message: bool = True,
 ) -> float:
     """
     製品ボックスの配列を描画する。
@@ -661,10 +662,11 @@ def draw_product_boxes(
         次の描画開始Y座標
     """
     if not items:
-        canv.saveState()
-        canv.setFont("MSGothic", 11)
-        canv.drawString(x + 10, y - 18, "該当する製品がありません")
-        canv.restoreState()
+        if show_empty_message:
+            canv.saveState()
+            canv.setFont("MSGothic", 11)
+            canv.drawString(x + 10, y - 18, "該当する製品がありません")
+            canv.restoreState()
         return y - 24
 
     gap = 2.5 * mm
@@ -692,6 +694,58 @@ def draw_product_boxes(
     return current_y + 6
 
 
+def draw_trip2_special_box(
+    canv: canvas.Canvas,
+    annotations: List[Dict[str, Any]],
+    x: float,
+    width: float,
+    row_top: float,
+    columns: int,
+) -> None:
+    """
+    2便目特記事項（SIGA/KANTATSU）を所定位置に描画
+    """
+    if not annotations:
+        return
+
+    gap = 2.5 * mm
+    row_height = 28 * mm
+    box_width = (width - gap * (columns - 1)) / columns
+    box_x = x + (columns - 1) * (box_width + gap)
+    row2_top = row_top - (row_height + 6)
+
+    lines: List[str] = []
+    for idx, ann in enumerate(annotations):
+        group_code = ann.get("group_code", "")
+        containers = ann.get("containers") or 0
+        try:
+            containers = int(containers)
+        except Exception:
+            containers = 1
+        containers = max(1, containers)
+
+        if group_code:
+            lines.append(str(group_code))
+        lines.append(f"{containers}容器")
+
+        if idx < len(annotations) - 1:
+            lines.append("")
+
+    filtered_lines = [line for line in lines if line or len(lines) == 1]
+    draw_product_box(
+        canv=canv,
+        x=box_x,
+        y=row2_top,
+        width=box_width,
+        height=row_height,
+        item={
+            "text_lines": filtered_lines,
+            "quantity": None,
+            "color": COLOR_BOX_EMPTY,
+        },
+    )
+
+
 def draw_trip_section(
     canv: canvas.Canvas,
     trip_no: str,
@@ -701,6 +755,7 @@ def draw_trip_section(
     x: float,
     y: float,
     width: float,
+    special_annotations: Optional[List[Dict[str, Any]]] = None,
 ) -> float:
     """
     出荷便ごとのセクションを描画する。
@@ -728,19 +783,45 @@ def draw_trip_section(
         width=width,
     )
 
+    columns = 5 if trip_no in ("1", "4") else 7
     filtered = _filter_positive_products(products)
-    if not filtered:
-        canv.saveState()
-        canv.setFont("MSGothic", 11)
-        canv.drawString(x + 10, current_y - 18, "該当する製品がありません")
-        canv.restoreState()
-        return current_y - 28
+    special_annotations = special_annotations or []
+    special_groups = set()
+    if trip_no == "2" and special_annotations:
+        for ann in special_annotations:
+            code = str(ann.get("group_code", "") or "").strip().upper()
+            if code:
+                special_groups.add(code)
+        if special_groups:
+            filtered = [
+                prod
+                for prod in filtered
+                if str(prod.get("group_code", "") or "").strip().upper() not in special_groups
+            ]
 
     products_sorted = sorted(filtered, key=lambda p: str(p.get("product_code", "")))
+    box_items = prepare_box_items(trip_no, products_sorted) if products_sorted else []
+    box_area_top = current_y
 
-    box_items = prepare_box_items(trip_no, products_sorted)
-    columns = 5 if trip_no in ("1", "4") else 7
-    current_y = draw_product_boxes(canv, box_items, x, current_y, width, columns=columns)
+    current_y = draw_product_boxes(
+        canv,
+        box_items,
+        x,
+        current_y,
+        width,
+        columns=columns,
+        show_empty_message=not (trip_no == "2" and special_annotations and not box_items),
+    )
+
+    if trip_no == "2" and special_annotations:
+        draw_trip2_special_box(
+            canv=canv,
+            annotations=special_annotations,
+            x=x,
+            width=width,
+            row_top=box_area_top,
+            columns=columns,
+        )
 
     return current_y - 8
 
@@ -815,13 +896,13 @@ def generate_shipping_order_pdf(
     current_y -= 24 * mm
 
     trips = [
-        ("1", "AM 06:00", "4t／5tブレード（1）", shipping_data.get("trip1", [])),
-        ("2", "AM 06:30", "ブレード", shipping_data.get("trip2", [])),
-        ("3", "AM 10:00", "オイルタンク・シートベース", shipping_data.get("trip3", [])),
-        ("4", "PM 13:00", "4t／5tブレード（2）", shipping_data.get("trip4", [])),
+        ("1", "AM 06:00", "4t／5tブレード(1)", shipping_data.get("trip1", []), None),
+        ("2", "AM 06:30", "ブレード", shipping_data.get("trip2", []), shipping_data.get("trip2_special_annotations")),
+        ("3", "AM 10:00", "オイルタンク・シートベース", shipping_data.get("trip3", []), None),
+        ("4", "PM 13:00", "4t／5tブレード(2)", shipping_data.get("trip4", []), None),
     ]
 
-    for trip_no, time_text, label_text, products in trips:
+    for trip_no, time_text, label_text, products, special in trips:
         current_y = draw_trip_section(
             canv,
             trip_no=trip_no,
@@ -831,8 +912,8 @@ def generate_shipping_order_pdf(
             x=margin_x,
             y=current_y,
             width=content_width,
+            special_annotations=special or [],
         )
-
         current_y -= 6 * mm
         if current_y < 35 * mm:
             canv.showPage()

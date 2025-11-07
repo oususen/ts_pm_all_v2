@@ -63,8 +63,8 @@ class ShippingOrderService:
                         cc.name LIKE '%4-5T%'
                         -- または機種名が特定の7種
                         OR UPPER(TRIM(p.model_name)) IN ('391', '17U', '20U', '26U', '19-6', '390', 'KOTEIKYAKU')
-                        -- または製品群がSEATBASE/TANK
-                        OR UPPER(TRIM(pg.group_code)) IN ('SEATBASE', 'TANK')
+                        -- または製品群がSEATBASE/TANK/SIGA/KANTATSU
+                        OR UPPER(TRIM(pg.group_code)) IN ('SEATBASE', 'TANK', 'SIGA', 'KANTATSU')
                     )
                 ORDER BY p.product_code
             """)
@@ -78,7 +78,8 @@ class ShippingOrderService:
                     'trip1': [],
                     'trip2': [],
                     'trip3': [],
-                    'trip4': []
+                    'trip4': [],
+                    'trip2_special_annotations': []
                 }
 
             # DataFrameに変換
@@ -105,13 +106,15 @@ class ShippingOrderService:
             trip2_data = self._filter_trip2(df)
             trip3_data = self._filter_trip3(df)
             trip4_data = self._split_trip1_to_trip4(trip1_data)
+            trip2_special = self._build_trip2_special_annotations(trip2_data)
 
             return {
                 'date': target_date,
                 'trip1': trip1_data,
                 'trip2': trip2_data,
                 'trip3': trip3_data,
-                'trip4': trip4_data
+                'trip4': trip4_data,
+                'trip2_special_annotations': trip2_special
             }
 
         finally:
@@ -130,12 +133,17 @@ class ShippingOrderService:
         ['391', '17U', '20U', '26U', '19-6', '390', 'KOTEIKYAKU']
         """
         target_models = ['391', '17U', '20U', '26U', '19-6', '390', 'KOTEIKYAKU']
+        special_groups = ['SIGA', 'KANTATSU']
 
         # 機種名を正規化（大文字・小文字、空白を統一）
         df['model_name_normalized'] = df['model_name'].str.strip().str.upper()
+        df['group_code_normalized'] = df['group_code'].str.strip().str.upper()
 
         # 完全一致または部分一致で検索
-        filtered = df[df['model_name_normalized'].isin([m.upper() for m in target_models])]
+        filtered = df[
+            df['model_name_normalized'].isin([m.upper() for m in target_models]) |
+            df['group_code_normalized'].isin(special_groups)
+        ]
 
         return filtered.to_dict('records')
 
@@ -232,6 +240,40 @@ class ShippingOrderService:
                 trip4_data.append(item_copy)
 
         return trip4_data
+
+
+    def _build_trip2_special_annotations(self, trip2_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        2便目用の特記事項（SIGA/KANTATSU）を作成
+        """
+        if not trip2_data:
+            return []
+
+        special_groups = ['SIGA', 'KANTATSU']
+        annotations: List[Dict[str, Any]] = []
+
+        for group_code in special_groups:
+            total_containers = 0
+            for item in trip2_data:
+                item_group = str(item.get('group_code', '') or '').strip().upper()
+                if item_group != group_code:
+                    continue
+
+                qty = int(item.get('order_quantity') or 0)
+                capacity = int(item.get('capacity') or 1)
+                if capacity <= 0:
+                    capacity = 1
+
+                containers = (qty + capacity - 1) // capacity
+                total_containers += max(1, containers)
+
+            if total_containers > 0:
+                annotations.append({
+                    'group_code': group_code,
+                    'containers': total_containers
+                })
+
+        return annotations
 
     def get_available_dates(self) -> List[date]:
         """
