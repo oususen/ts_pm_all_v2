@@ -26,6 +26,7 @@ COLOR_SEATBASE_GREEN = colors.HexColor("#a9d99a")
 COLOR_TANK_BLUE = colors.HexColor("#8fd3ff")
 COLOR_BOX_BORDER = colors.HexColor("#6b6b6b")
 COLOR_BOX_EMPTY = colors.HexColor("#f5f5f5")
+COLOR_RIDEN_PINK = colors.HexColor("#f7b7d2")
 
 
 def register_japanese_fonts() -> None:
@@ -714,6 +715,14 @@ def draw_trip2_special_box(
     box_x = x + (columns - 1) * (box_width + gap)
     row2_top = row_top - (row_height + 6)
 
+    display_names = {
+        "SIGA": "リーデン 滋賀",
+        "KANTATSU": "リーデン 神立",
+    }
+    display_locations = {
+        "SIGA": "滋賀",
+        "KANTATSU": "神立",
+    }
     lines: List[str] = []
     for idx, ann in enumerate(annotations):
         group_code = ann.get("group_code", "")
@@ -724,8 +733,11 @@ def draw_trip2_special_box(
             containers = 1
         containers = max(1, containers)
 
-        if group_code:
-            lines.append(str(group_code))
+        location = display_locations.get(group_code, group_code or "")
+
+        lines.append("リーデン")
+        if location:
+            lines.append(location)
         lines.append(f"{containers}容器")
 
         if idx < len(annotations) - 1:
@@ -741,7 +753,7 @@ def draw_trip2_special_box(
         item={
             "text_lines": filtered_lines,
             "quantity": None,
-            "color": COLOR_BOX_EMPTY,
+            "color": COLOR_RIDEN_PINK,
         },
     )
 

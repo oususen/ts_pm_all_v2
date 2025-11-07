@@ -151,8 +151,12 @@ class ShippingOrderPage:
         with tab2:
             special_notes = data.get('trip2_special_annotations', [])
             if special_notes:
+                display_names = {
+                    'SIGA': 'リーデン 滋賀',
+                    'KANTATSU': 'リーデン 神立'
+                }
                 info_text = " / ".join(
-                    f"{note['group_code']}: {note['containers']}容器"
+                    f"{display_names.get(note['group_code'], note['group_code'])}: {note['containers']}容器"
                     for note in special_notes
                 )
                 st.info(f"特記事項（2便目右端）：{info_text}")
