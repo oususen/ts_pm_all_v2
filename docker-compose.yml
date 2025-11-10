@@ -7,6 +7,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${PRIMARY_DB_PASSWORD:-rootpassword}
       MYSQL_DATABASE: kubota_db
+      TZ: Asia/Tokyo
     ports:
       - "3308:3306"
     volumes:
@@ -46,6 +47,9 @@ services:
     ports:
       - "8502:8501"
     environment:
+      # タイムゾーン設定
+      TZ: Asia/Tokyo
+
       # アプリケーション設定
       APP_ENV: ${APP_ENV:-development}
 

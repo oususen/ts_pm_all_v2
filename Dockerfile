@@ -13,7 +13,12 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     fonts-ipafont-gothic \
     fonts-takao-gothic \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# タイムゾーンを日本時間に設定
+ENV TZ=Asia/Tokyo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # requirements.txt をコピー
 COPY requirements.txt .
