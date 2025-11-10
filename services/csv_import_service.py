@@ -323,6 +323,23 @@ class CSVImportService:
                 if existing_record_type and existing_record_type.endswith('_KAKUTEI'):
                     continue
 
+                confirmed_row = session.execute(text("""
+                    SELECT 1
+                    FROM production_instructions_detail
+                    WHERE product_id = :product_id
+                      AND instruction_date = :instruction_date
+                      AND inspection_category = :inspection_category
+                      AND order_type = '確定'
+                    LIMIT 1
+                """), {
+                    'product_id': product_id,
+                    'instruction_date': instruction_date,
+                    'inspection_category': inspection_category_value
+                }).fetchone()
+
+                if confirmed_row:
+                    continue
+
                 # ✅ 数量0でもREPLACEで保持（削除はしない）
                 session.execute(text("""
                     REPLACE INTO production_instructions_detail

@@ -221,7 +221,7 @@ class KubotaKakuteiCSVImportService:
                 )
 
                 existing_row = session.execute(text("""
-                    SELECT instruction_quantity
+                    SELECT instruction_quantity, order_number
                     FROM production_instructions_detail
                     WHERE product_id = :product_id
                       AND instruction_date = :instruction_date
@@ -233,19 +233,12 @@ class KubotaKakuteiCSVImportService:
                 }).fetchone()
 
                 base_quantity = int(existing_row[0]) if existing_row and existing_row[0] is not None else 0
+                previous_order_numbers = set()
+                if existing_row and existing_row[1]:
+                    previous_order_numbers = set(existing_row[1].split('+'))
 
                 order_prefix = f"KUBOTA-KAKUTEI-{delivery_date.strftime('%Y%m%d')}-{product_code}-{inspection_category}-"
                 order_id = f"KUBOTA-KAKUTEI-{delivery_date.strftime('%Y%m%d')}-{product_code}-{inspection_category}"
-                existing_confirm_row = session.execute(text("""
-                    SELECT order_quantity, order_number
-                    FROM delivery_progress
-                    WHERE order_id = :order_id
-                """), {'order_id': order_id}).fetchone()
-
-                previous_confirm_total = int(existing_confirm_row[0]) if existing_confirm_row and existing_confirm_row[0] is not None else 0
-                previous_order_numbers = set()
-                if existing_confirm_row and existing_confirm_row[1]:
-                    previous_order_numbers = set(existing_confirm_row[1].split('+'))
 
                 current_order_numbers = set(order_details.keys())
                 new_order_numbers = current_order_numbers - previous_order_numbers
@@ -291,8 +284,8 @@ class KubotaKakuteiCSVImportService:
                         'product_name': item['product_name'] or product_code,
                         'inspection_category': inspection_category,
                         'instruction_date': delivery_date,
-                        'previous_quantity': previous_confirm_total,
-                        'new_quantity': previous_confirm_total + addition_quantity,
+                        'previous_quantity': base_quantity,
+                        'new_quantity': new_total,
                         'difference': addition_quantity,
                         'order_type': '確定',
                         'order_numbers': sorted(changed_orders_set) or sorted(current_order_numbers)
