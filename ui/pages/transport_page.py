@@ -231,7 +231,7 @@ class TransportPage:
             start_date = quick_date_input(
                 "計画開始日",
                 key="loading_plan_start_date",
-                value=date.today() - timedelta(days=3),
+                value=date.today() - timedelta(days=13),
                 min_value=date.today() - timedelta(days=3),
                 help="積載計画の開始日（納期の最も早い日付を含めてください）",
             )
