@@ -458,13 +458,14 @@ def chunked(items: Sequence[Any], size: int) -> List[List[Any]]:
     return [list(items[i : i + size]) for i in range(0, len(items), size)]
 
 
-def prepare_box_items(trip_no: str, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def prepare_box_items(trip_no: str, products: List[Dict[str, Any]], db_manager=None) -> List[Dict[str, Any]]:
     """
     便ごとの製品リストを PDF ボックス描画用データへ変換する。
 
     Args:
         trip_no: 便番号（「1」「2」「3」「4」）
         products: 製品情報のリスト
+        db_manager: データベースマネージャー（SUB_BLADE製品の容器情報取得用）
 
     Returns:
         描画用ボックスデータのリスト
@@ -472,6 +473,7 @@ def prepare_box_items(trip_no: str, products: List[Dict[str, Any]]) -> List[Dict
     処理内容:
         - 1便目・4便目: 3台ずつカートにまとめて表示
         - 2便目・3便目: 容器単位（capacity）で分割して表示
+        - SUB_BLADE製品: MAIN機種名の容器情報を参照
         - その他: 製品ごとに1マス表示
     """
     filtered = _filter_positive_products(products)
@@ -531,6 +533,20 @@ def prepare_box_items(trip_no: str, products: List[Dict[str, Any]]) -> List[Dict
         for prod in filtered:
             order_qty = int(_normalize_quantity_value(prod.get("order_quantity")) or 0)
             capacity = int(_normalize_quantity_value(prod.get("capacity")) or 1)
+
+            # SUB_BLADE製品の場合、MAIN機種名の容器情報を参照
+            group_code = str(prod.get("group_code", "") or "").strip().upper()
+            if group_code == "SUB_BLADE" and (capacity <= 0 or capacity == 1) and db_manager:
+                try:
+                    from services.shipping_order_service import ShippingOrderService
+                    service = ShippingOrderService(db_manager)
+                    product_id = prod.get("product_id")
+                    if product_id:
+                        main_container_info = service.get_main_container_info(product_id)
+                        if main_container_info and main_container_info.get("capacity"):
+                            capacity = int(main_container_info["capacity"])
+                except Exception:
+                    pass  # エラー時はデフォルトの capacity を使用
 
             if capacity <= 0:
                 capacity = 1
@@ -786,6 +802,7 @@ def draw_trip_section(
     y: float,
     width: float,
     special_annotations: Optional[List[Dict[str, Any]]] = None,
+    db_manager=None,
 ) -> float:
     """
     出荷便ごとのセクションを描画する。
@@ -830,7 +847,7 @@ def draw_trip_section(
             ]
 
     products_sorted = sorted(filtered, key=lambda p: str(p.get("product_code", "")))
-    box_items = prepare_box_items(trip_no, products_sorted) if products_sorted else []
+    box_items = prepare_box_items(trip_no, products_sorted, db_manager) if products_sorted else []
     has_main_row = bool(box_items)
     box_area_top = current_y
 
@@ -863,6 +880,7 @@ def generate_shipping_order_pdf(
     shipping_data: Dict[str, Any],
     output_path: str,
     creator_name: str = "システム",
+    db_manager=None,
 ) -> str:
     """
     出荷指示書 PDF を生成してファイルに書き出す。
@@ -871,6 +889,7 @@ def generate_shipping_order_pdf(
         shipping_data: 出荷データ（date, trip1, trip2, trip3, trip4 を含む辞書）
         output_path: 出力先PDFファイルのパス
         creator_name: 作成者名（デフォルト: 「システム」）
+        db_manager: データベースマネージャー（SUB_BLADE製品の容器情報取得用）
 
     Returns:
         出力したPDFファイルのパス
@@ -946,6 +965,7 @@ def generate_shipping_order_pdf(
             y=current_y,
             width=content_width,
             special_annotations=special or [],
+            db_manager=db_manager,
         )
         current_y -= 6 * mm
         if current_y < 35 * mm:

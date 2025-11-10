@@ -104,7 +104,8 @@ class ShippingOrderPage:
                 generate_shipping_order_pdf(
                     shipping_data=shipping_data,
                     output_path=str(output_path),
-                    creator_name=user_name
+                    creator_name=user_name,
+                    db_manager=self.db
                 )
 
             st.success(f"✅ PDFを生成しました: {filename}")

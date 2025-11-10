@@ -7,6 +7,7 @@ delivery_progressとproductsから出荷指示書用のデータを取得・振�
 from datetime import date
 from typing import List, Dict, Any, Optional
 import pandas as pd
+import re
 from repository.database_manager import DatabaseManager
 from sqlalchemy import text
 
@@ -37,7 +38,7 @@ class ShippingOrderService:
         session = self.db.get_session()
         try:
             # Tiera製品のみを対象とする
-            # 出荷指示書の対象製品（容器4-5T、特定機種名、製品群SEATBASE/TANK）
+            # 出荷指示書の対象製品（容器4-5T、特定機種名、製品群SEATBASE/TANK/SUB_BLADE）
             query = text("""
                 SELECT
                     dp.order_id,
@@ -63,8 +64,8 @@ class ShippingOrderService:
                         cc.name LIKE '%4-5T%'
                         -- または機種名が特定の7種
                         OR UPPER(TRIM(p.model_name)) IN ('391', '17U', '20U', '26U', '19-6', '390', 'KOTEIKYAKU')
-                        -- または製品群がSEATBASE/TANK/SIGA/KANTATSU
-                        OR UPPER(TRIM(pg.group_code)) IN ('SEATBASE', 'TANK', 'SIGA', 'KANTATSU')
+                        -- または製品群がSEATBASE/TANK/SIGA/KANTATSU/SUB_BLADE
+                        OR UPPER(TRIM(pg.group_code)) IN ('SEATBASE', 'TANK', 'SIGA', 'KANTATSU', 'SUB_BLADE')
                     )
                 ORDER BY p.product_code
             """)
@@ -129,11 +130,12 @@ class ShippingOrderService:
 
     def _filter_trip2(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
         """
-        2便目: 機種名が特定の7種
+        2便目: 機種名が特定の7種、または製品群がSIGA/KANTATSU/SUB_BLADE
         ['391', '17U', '20U', '26U', '19-6', '390', 'KOTEIKYAKU']
+        SUB_BLADE製品群: 専用容器なし、MAIN機種名の容器を使用
         """
         target_models = ['391', '17U', '20U', '26U', '19-6', '390', 'KOTEIKYAKU']
-        special_groups = ['SIGA', 'KANTATSU']
+        special_groups = ['SIGA', 'KANTATSU', 'SUB_BLADE']
 
         # 機種名を正規化（大文字・小文字、空白を統一）
         df['model_name_normalized'] = df['model_name'].str.strip().str.upper()
@@ -295,6 +297,83 @@ class ShippingOrderService:
             rows = result.fetchall()
 
             return [row.order_date for row in rows]
+
+        finally:
+            session.close()
+
+    def _extract_main_model_name(self, model_name: str) -> str:
+        """
+        SUB製品の機種名からMAIN機種名を抽出
+        例: '17U-L' -> '17U', '20U-R' -> '20U'
+
+        Args:
+            model_name: SUB製品の機種名
+
+        Returns:
+            MAIN機種名（-L/-Rを除いた部分）
+        """
+        if not model_name:
+            return ''
+
+        # -L または -R を除去
+        main_name = re.sub(r'-[LR]$', '', model_name.strip(), flags=re.IGNORECASE)
+        return main_name.upper()
+
+    def get_main_container_info(self, sub_product_id: int) -> Optional[Dict[str, Any]]:
+        """
+        SUB製品のMAIN機種名に対応する容器情報を取得
+
+        Args:
+            sub_product_id: SUB製品のID
+
+        Returns:
+            容器情報（容器名、入り数）またはNone
+        """
+        session = self.db.get_session()
+        try:
+            # SUB製品の情報を取得
+            query_sub = text("""
+                SELECT p.model_name
+                FROM products p
+                WHERE p.id = :product_id
+            """)
+            result = session.execute(query_sub, {'product_id': sub_product_id})
+            sub_row = result.fetchone()
+
+            if not sub_row or not sub_row.model_name:
+                return None
+
+            # MAIN機種名を抽出
+            main_model_name = self._extract_main_model_name(sub_row.model_name)
+
+            if not main_model_name:
+                return None
+
+            # MAIN機種名に該当する製品の容器情報を取得
+            query_main = text("""
+                SELECT
+                    p.capacity,
+                    cc.name as container_name,
+                    p.used_container_id
+                FROM products p
+                LEFT JOIN container_capacity cc ON p.used_container_id = cc.id
+                WHERE UPPER(TRIM(p.model_name)) = :main_model_name
+                    AND p.capacity IS NOT NULL
+                    AND p.capacity > 0
+                LIMIT 1
+            """)
+
+            result_main = session.execute(query_main, {'main_model_name': main_model_name})
+            main_row = result_main.fetchone()
+
+            if main_row:
+                return {
+                    'capacity': main_row.capacity,
+                    'container_name': main_row.container_name or '',
+                    'container_id': main_row.used_container_id
+                }
+
+            return None
 
         finally:
             session.close()
