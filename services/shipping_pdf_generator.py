@@ -529,46 +529,153 @@ def prepare_box_items(trip_no: str, products: List[Dict[str, Any]], db_manager=N
         return cards
 
     if trip_no in ("2", "3"):
-        containers: List[Dict[str, Any]] = []
-        for prod in filtered:
-            order_qty = int(_normalize_quantity_value(prod.get("order_quantity")) or 0)
-            capacity = int(_normalize_quantity_value(prod.get("capacity")) or 1)
+        # MAINとSUBを機種名でグループ化して処理
+        from services.shipping_order_service import ShippingOrderService
 
-            # SUB_BLADE製品の場合、MAIN機種名の容器情報を参照
+        # MAINとSUBを分離
+        main_products: List[Dict[str, Any]] = []
+        sub_products: List[Dict[str, Any]] = []
+
+        for prod in filtered:
             group_code = str(prod.get("group_code", "") or "").strip().upper()
-            if group_code == "SUB_BLADE" and (capacity <= 0 or capacity == 1) and db_manager:
-                try:
-                    from services.shipping_order_service import ShippingOrderService
-                    service = ShippingOrderService(db_manager)
-                    product_id = prod.get("product_id")
-                    if product_id:
-                        main_container_info = service.get_main_container_info(product_id)
-                        if main_container_info and main_container_info.get("capacity"):
-                            capacity = int(main_container_info["capacity"])
-                except Exception:
-                    pass  # エラー時はデフォルトの capacity を使用
+            if group_code == "SUB_BLADE":
+                sub_products.append(prod)
+            else:
+                main_products.append(prod)
+
+        # SUBを機種名でグループ化（MAIN機種名に変換）
+        sub_by_main_model: Dict[str, List[Dict[str, Any]]] = {}
+        if db_manager:
+            try:
+                service = ShippingOrderService(db_manager)
+                for sub_prod in sub_products:
+                    model_name = str(sub_prod.get("model_name", "") or "").strip()
+                    if model_name:
+                        main_model = service._extract_main_model_name(model_name)
+                        if main_model:
+                            # 空白を完全に除去して正規化
+                            main_model_key = main_model.replace(" ", "").replace("　", "")
+                            if main_model_key not in sub_by_main_model:
+                                sub_by_main_model[main_model_key] = []
+                            sub_by_main_model[main_model_key].append(sub_prod)
+            except Exception as e:
+                import traceback
+                print(f"Error in SUB grouping: {e}")
+                traceback.print_exc()
+
+        # デバッグ情報
+        print(f"DEBUG: trip_no={trip_no}, main_products={len(main_products)}, sub_products={len(sub_products)}")
+        print(f"DEBUG: sub_by_main_model keys={list(sub_by_main_model.keys())}")
+        for key, subs in sub_by_main_model.items():
+            print(f"DEBUG:   {key}: {len(subs)} SUB products")
+
+        containers: List[Dict[str, Any]] = []
+
+        # MAIN製品を処理
+        for main_prod in main_products:
+            order_qty = int(_normalize_quantity_value(main_prod.get("order_quantity")) or 0)
+            capacity = int(_normalize_quantity_value(main_prod.get("capacity")) or 1)
 
             if capacity <= 0:
                 capacity = 1
 
-            # 容器数を計算（切り上げ）
-            num_containers = (order_qty + capacity - 1) // capacity
+            # MAIN製品の機種名を取得（空白を完全に除去して正規化）
+            main_model_name = str(main_prod.get("model_name", "") or "").strip().upper()
+            main_model_name_key = main_model_name.replace(" ", "").replace("　", "")
 
-            # 各容器を個別のマスとして追加
+            # デバッグ：MAIN製品情報
+            print(f"DEBUG: MAIN product: model_name='{main_model_name}' -> key='{main_model_name_key}'")
+
+            # 対応するSUB製品の総数量を取得
+            sub_total_qty = 0
+            sub_prods_for_this_main = sub_by_main_model.get(main_model_name_key, [])
+            print(f"DEBUG:   Found {len(sub_prods_for_this_main)} SUB products for key '{main_model_name_key}'")
+            for sub_prod in sub_prods_for_this_main:
+                sub_qty = int(_normalize_quantity_value(sub_prod.get("order_quantity")) or 0)
+                print(f"DEBUG:     SUB product: model_name='{sub_prod.get('model_name')}', quantity={sub_qty}")
+                sub_total_qty += sub_qty
+            print(f"DEBUG:   Total SUB quantity for '{main_model_name_key}': {sub_total_qty}")
+
+            # MAINの容器数を計算（SUBは含めない、MAINのみで容器数を決定）
+            num_containers = (order_qty + capacity - 1) // capacity
+            print(f"DEBUG:   MAIN containers: {num_containers}, total_sub_qty: {sub_total_qty}")
+
+            # MAIN製品のみで容器を作成（通常の表示）
+            remaining_main = order_qty
             for i in range(num_containers):
-                # 最後の容器は残りの数量
-                if i == num_containers - 1:
-                    container_qty = order_qty - (i * capacity)
-                else:
-                    container_qty = capacity
+                # この容器のMAIN数量
+                main_in_container = min(capacity, remaining_main)
+                remaining_main -= main_in_container
+
+                # 表示テキストを作成（通常の表示、「MAIN」接頭辞なし）
+                text_lines = _format_unit_label(main_prod)
+                text_lines.append(f"{main_in_container}個")
+
+                # 最後の容器の場合、SUB情報を追加
+                if i == num_containers - 1 and sub_total_qty > 0:
+                    # SUB製品の詳細を追加
+                    for sub_prod in sub_prods_for_this_main:
+                        sub_qty = int(_normalize_quantity_value(sub_prod.get("order_quantity")) or 0)
+                        sub_model = str(sub_prod.get("model_name", "") or "").strip()
+                        if sub_qty > 0:
+                            text_lines.append(f"{sub_model} {sub_qty}個")
+                            print(f"DEBUG:   Added SUB line: '{sub_model} {sub_qty}個'")
 
                 containers.append(
                     {
-                        "text_lines": _format_unit_label(prod),
-                        "quantity": container_qty,
-                        "color": determine_box_color(trip_no, prod),
+                        "text_lines": text_lines,
+                        "color": determine_box_color(trip_no, main_prod),
                     }
                 )
+
+        # SUBでMAINが存在しない場合の処理
+        for main_model, sub_prods in sub_by_main_model.items():
+            # このMAINモデルが既に処理されているかチェック
+            main_exists = any(
+                str(p.get("model_name", "") or "").strip().upper() == main_model
+                for p in main_products
+            )
+
+            if not main_exists:
+                # MAINがない場合、SUBのみで容器を作成
+                for sub_prod in sub_prods:
+                    order_qty = int(_normalize_quantity_value(sub_prod.get("order_quantity")) or 0)
+                    capacity = 1  # デフォルト
+
+                    # MAIN容器情報を取得
+                    if db_manager:
+                        try:
+                            service = ShippingOrderService(db_manager)
+                            product_id = sub_prod.get("product_id")
+                            if product_id:
+                                main_container_info = service.get_main_container_info(product_id)
+                                if main_container_info and main_container_info.get("capacity"):
+                                    capacity = int(main_container_info["capacity"])
+                        except Exception:
+                            pass
+
+                    if capacity <= 0:
+                        capacity = 1
+
+                    num_containers = (order_qty + capacity - 1) // capacity
+
+                    for i in range(num_containers):
+                        if i == num_containers - 1:
+                            container_qty = order_qty - (i * capacity)
+                        else:
+                            container_qty = capacity
+
+                        # text_linesに個数を追加
+                        text_lines = _format_unit_label(sub_prod)
+                        text_lines.append(f"{container_qty}個")
+
+                        containers.append(
+                            {
+                                "text_lines": text_lines,
+                                "color": determine_box_color(trip_no, sub_prod),
+                            }
+                        )
+
         return containers
 
     items: List[Dict[str, Any]] = []
