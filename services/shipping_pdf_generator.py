@@ -632,49 +632,85 @@ def prepare_box_items(trip_no: str, products: List[Dict[str, Any]], db_manager=N
         for main_model, sub_prods in sub_by_main_model.items():
             # このMAINモデルが既に処理されているかチェック
             main_exists = any(
-                str(p.get("model_name", "") or "").strip().upper() == main_model
+                str(p.get("model_name", "") or "").strip().upper().replace(" ", "").replace("　", "") == main_model
                 for p in main_products
             )
 
             if not main_exists:
-                # MAINがない場合、SUBのみで容器を作成
+                # L/Rをチェック
+                has_L = False
+                has_R = False
+
                 for sub_prod in sub_prods:
-                    order_qty = int(_normalize_quantity_value(sub_prod.get("order_quantity")) or 0)
-                    capacity = 1  # デフォルト
+                    model_name = str(sub_prod.get("model_name", "") or "").strip().upper()
+                    # -L または末尾がLの場合
+                    if "-L" in model_name or (model_name.endswith("L") and not model_name.endswith("BL")):
+                        has_L = True
+                    # -R または末尾がRの場合
+                    elif "-R" in model_name or model_name.endswith("R"):
+                        has_R = True
 
-                    # MAIN容器情報を取得
-                    if db_manager:
-                        try:
-                            service = ShippingOrderService(db_manager)
-                            product_id = sub_prod.get("product_id")
-                            if product_id:
-                                main_container_info = service.get_main_container_info(product_id)
-                                if main_container_info and main_container_info.get("capacity"):
-                                    capacity = int(main_container_info["capacity"])
-                        except Exception:
-                            pass
+                # L/R両方ある場合は1つの容器にまとめる
+                if has_L and has_R:
+                    print(f"DEBUG: Merging L/R for main_model '{main_model}' into one container")
+                    # 全SUBをまとめて1つの容器に
+                    text_lines = []
+                    for sub_prod in sub_prods:
+                        order_qty = int(_normalize_quantity_value(sub_prod.get("order_quantity")) or 0)
+                        if order_qty > 0:
+                            model_name = str(sub_prod.get("model_name", "") or "").strip()
+                            product_code = str(sub_prod.get("product_code", "") or "")
+                            text_lines.append(model_name)
+                            if product_code:
+                                text_lines.append(product_code)
+                            text_lines.append(f"{order_qty}個")
 
-                    if capacity <= 0:
-                        capacity = 1
+                    containers.append(
+                        {
+                            "text_lines": text_lines,
+                            "color": determine_box_color(trip_no, sub_prods[0]),
+                        }
+                    )
+                else:
+                    # L/Rの片方しかない場合は従来通り個別に容器を作成
+                    print(f"DEBUG: Creating separate containers for main_model '{main_model}' (has_L={has_L}, has_R={has_R})")
+                    for sub_prod in sub_prods:
+                        order_qty = int(_normalize_quantity_value(sub_prod.get("order_quantity")) or 0)
+                        capacity = 1  # デフォルト
 
-                    num_containers = (order_qty + capacity - 1) // capacity
+                        # MAIN容器情報を取得
+                        if db_manager:
+                            try:
+                                service = ShippingOrderService(db_manager)
+                                product_id = sub_prod.get("product_id")
+                                if product_id:
+                                    main_container_info = service.get_main_container_info(product_id)
+                                    if main_container_info and main_container_info.get("capacity"):
+                                        capacity = int(main_container_info["capacity"])
+                            except Exception:
+                                pass
 
-                    for i in range(num_containers):
-                        if i == num_containers - 1:
-                            container_qty = order_qty - (i * capacity)
-                        else:
-                            container_qty = capacity
+                        if capacity <= 0:
+                            capacity = 1
 
-                        # text_linesに個数を追加
-                        text_lines = _format_unit_label(sub_prod)
-                        text_lines.append(f"{container_qty}個")
+                        num_containers = (order_qty + capacity - 1) // capacity
 
-                        containers.append(
-                            {
-                                "text_lines": text_lines,
-                                "color": determine_box_color(trip_no, sub_prod),
-                            }
-                        )
+                        for i in range(num_containers):
+                            if i == num_containers - 1:
+                                container_qty = order_qty - (i * capacity)
+                            else:
+                                container_qty = capacity
+
+                            # text_linesに個数を追加
+                            text_lines = _format_unit_label(sub_prod)
+                            text_lines.append(f"{container_qty}個")
+
+                            containers.append(
+                                {
+                                    "text_lines": text_lines,
+                                    "color": determine_box_color(trip_no, sub_prod),
+                                }
+                            )
 
         return containers
 
