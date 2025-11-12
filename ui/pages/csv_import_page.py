@@ -185,7 +185,7 @@ class CSVImportPage:
                 imported_at = duplicate_record['import_date']
                 imported_at_str = imported_at.strftime("%Y-%m-%d %H:%M:%S") if isinstance(imported_at, datetime) else str(imported_at)
                 warning_message = duplicate_record['message'] or "既存履歴あり"
-                st.warning(
+                st.error(
                     f"⚠️ このファイル名は {imported_at_str} に取り込み済みです。\n\n"
                     f"履歴メッセージ: {warning_message}\n"
                     "再度インポートすると既存データを上書きします。内容を再確認してください。"
