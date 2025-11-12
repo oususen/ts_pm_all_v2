@@ -29,8 +29,8 @@ COLOR_BOX_EMPTY = colors.HexColor("#f5f5f5")
 COLOR_RIDEN_PINK = colors.HexColor("#f7b7d2")
 
 BOX_GAP = 2.5 * mm
-BOX_ROW_HEIGHT = 28 * mm
-BOX_ROW_SPACING = 6  # points
+BOX_ROW_HEIGHT = 26 * mm
+BOX_ROW_SPACING = 4  # points
 
 
 def register_japanese_fonts() -> None:
@@ -1016,7 +1016,7 @@ def draw_trip_section(
             has_main_row=has_main_row,
         )
 
-    return current_y - extra_height - 4
+    return current_y - extra_height - 2
 
 
 def generate_shipping_order_pdf(
@@ -1110,7 +1110,7 @@ def generate_shipping_order_pdf(
             special_annotations=special or [],
             db_manager=db_manager,
         )
-        current_y -= 3 * mm
+        current_y -= 2 * mm
         if current_y < 20 * mm:
             canv.showPage()
             current_y = page_height - margin_top
