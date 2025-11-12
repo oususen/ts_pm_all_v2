@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
+from sqlalchemy import text
 from services.csv_import_service import CSVImportService
 from services.tiera_csv_import_service import TieraCSVImportService
 from services.tiera_kakutei_csv_import_service import TieraKakuteiCSVImportService
@@ -179,6 +180,16 @@ class CSVImportPage:
         )
         
         if uploaded_file is not None:
+            duplicate_record = self._find_duplicate_import(uploaded_file.name)
+            if duplicate_record:
+                imported_at = duplicate_record['import_date']
+                imported_at_str = imported_at.strftime("%Y-%m-%d %H:%M:%S") if isinstance(imported_at, datetime) else str(imported_at)
+                warning_message = duplicate_record['message'] or "既存履歴あり"
+                st.warning(
+                    f"⚠️ このファイル名は {imported_at_str} に取り込み済みです。\n\n"
+                    f"履歴メッセージ: {warning_message}\n"
+                    "再度インポートすると既存データを上書きします。内容を再確認してください。"
+                )
             # プレビュー表示
             try:
                 # 顧客に応じたエンコーディングで読み込み
@@ -629,6 +640,71 @@ class CSVImportPage:
         - 「配送便計画」で自動的に積載計画が作成されます
         - 検査区分F/$を含む製品は自動的にハイライトされます
         """)
+    
+    def _find_duplicate_import(self, filename: str):
+        """同名ファイルのインポート履歴を検索"""
+        if not filename or not self.import_service:
+            return None
+        
+        session = self.db_manager.get_session()
+        try:
+            rows = session.execute(
+                text("""
+                    SELECT import_date, message
+                    FROM csv_import_history
+                    WHERE filename = :filename
+                    ORDER BY import_date DESC
+                    LIMIT 20
+                """),
+                {'filename': filename}
+            ).fetchall()
+        except Exception as e:
+            print(f"重複チェックエラー: {e}")
+            return None
+        finally:
+            session.close()
+        
+        for import_date, message in rows:
+            if self._history_matches_service(self.import_service, message):
+                return {'import_date': import_date, 'message': message}
+        return None
+    
+    def _history_matches_service(self, service, message: str) -> bool:
+        """履歴メッセージが現在のサービスのものかを判定"""
+        if service is None:
+            return False
+        
+        normalized = (message or "").strip()
+        
+        if isinstance(service, TieraRidenCSVImportService):
+            prefix = getattr(service, "HISTORY_PREFIX", "[ティエラ様・リーデン確定]")
+            return normalized.startswith(prefix)
+        
+        if isinstance(service, TieraKakuteiCSVImportService):
+            prefix = getattr(service, "HISTORY_PREFIX", "[ティエラ様・確定CSV]")
+            return normalized.startswith(prefix)
+        
+        if isinstance(service, TieraCSVImportService):
+            prefix = getattr(service, "HISTORY_PREFIX", "[ティエラ様・内示CSV]")
+            if normalized.startswith(prefix):
+                return True
+            return normalized.startswith("[ティエラ様]") and ("確定" not in normalized and "リーデン" not in normalized)
+        
+        if isinstance(service, KubotaKakuteiCSVImportService):
+            prefix = getattr(service, "HISTORY_PREFIX", "[クボタ様・確定CSV]")
+            return normalized.startswith(prefix) or normalized.startswith("[確定CSV]")
+        
+        if isinstance(service, CSVImportService):
+            prefix = getattr(service, "HISTORY_PREFIX", "[クボタ様・内示CSV]")
+            if normalized.startswith(prefix):
+                return True
+            if normalized.startswith("["):
+                if any(keyword in normalized for keyword in ["確定", "リーデン", "ティエラ"]):
+                    return False
+                return ("内示" in normalized) or ("クボタ" in normalized)
+            return True
+        
+        return False
     
     def _log_import_history(self, filename: str, message: str):
         """インポート履歴を記録"""

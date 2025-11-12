@@ -8,6 +8,8 @@ from sqlalchemy import text
 class KubotaKakuteiCSVImportService:
     """クボタ向け確定受注CSVインポートサービス（JVAN形式）"""
 
+    HISTORY_PREFIX = "[クボタ様・確定CSV]"
+
     def __init__(self, db_manager):
         self.db = db_manager
         self.latest_quantity_changes: List[Dict] = []
@@ -83,6 +85,10 @@ class KubotaKakuteiCSVImportService:
             match = re.search(r'(\d+)件', message)
             record_count = int(match.group(1)) if match else 0
 
+            history_message = message
+            if not history_message.startswith(self.HISTORY_PREFIX):
+                history_message = f"{self.HISTORY_PREFIX} {message}"
+
             session.execute(text("""
                 INSERT INTO csv_import_history
                 (filename, import_date, record_count, status, message)
@@ -92,7 +98,7 @@ class KubotaKakuteiCSVImportService:
                 'import_date': datetime.now(),
                 'record_count': record_count,
                 'status': '成功',
-                'message': message
+                'message': history_message
             })
             session.commit()
         except Exception:

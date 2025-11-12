@@ -5,6 +5,8 @@ from typing import Tuple, List, Dict
 
 class CSVImportService:
     """CSV受注インポートサービス"""
+
+    HISTORY_PREFIX = "[クボタ様・内示CSV]"
     
     def __init__(self, db_manager):
         self.db = db_manager
@@ -596,6 +598,10 @@ class CSVImportService:
             import re
             match = re.search(r'(\d+)件', message)
             record_count = int(match.group(1)) if match else 0
+
+            history_message = message
+            if not history_message.startswith(self.HISTORY_PREFIX):
+                history_message = f"{self.HISTORY_PREFIX} {message}"
             
             session.execute(text("""
                 INSERT INTO csv_import_history 
@@ -606,7 +612,7 @@ class CSVImportService:
                 'import_date': datetime.now(),
                 'record_count': record_count,
                 'status': '成功',
-                'message': message
+                'message': history_message
             })
             session.commit()
         except Exception:

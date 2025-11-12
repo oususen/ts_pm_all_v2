@@ -16,6 +16,8 @@ class TieraKakuteiCSVImportService:
     - 列47: 品名（英語）
     """
 
+    HISTORY_PREFIX = "[ティエラ様・確定CSV]"
+
     # 列インデックス定義
     COL_DRAWING_NO = 11      # 図番
     COL_DELIVERY_DATE = 13   # 納期
@@ -420,6 +422,10 @@ class TieraKakuteiCSVImportService:
             match = re.search(r'(\d+)件', message)
             record_count = int(match.group(1)) if match else 0
 
+            history_message = message
+            if not history_message.startswith(self.HISTORY_PREFIX):
+                history_message = f"{self.HISTORY_PREFIX} {message}"
+
             session.execute(text("""
                 INSERT INTO csv_import_history
                 (filename, import_date, record_count, status, message)
@@ -429,7 +435,7 @@ class TieraKakuteiCSVImportService:
                 'import_date': datetime.now(),
                 'record_count': record_count,
                 'status': '成功',
-                'message': f"[ティエラ様・確定CSV] {message}"
+                'message': history_message
             })
             session.commit()
         except Exception:
