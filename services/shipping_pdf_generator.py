@@ -1016,7 +1016,7 @@ def draw_trip_section(
             has_main_row=has_main_row,
         )
 
-    return current_y - extra_height - 8
+    return current_y - extra_height - 4
 
 
 def generate_shipping_order_pdf(
@@ -1110,8 +1110,8 @@ def generate_shipping_order_pdf(
             special_annotations=special or [],
             db_manager=db_manager,
         )
-        current_y -= 6 * mm
-        if current_y < 35 * mm:
+        current_y -= 3 * mm
+        if current_y < 20 * mm:
             canv.showPage()
             current_y = page_height - margin_top
 
