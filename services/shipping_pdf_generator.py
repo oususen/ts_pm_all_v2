@@ -1004,8 +1004,9 @@ def draw_trip_section(
         show_empty_message=not (trip_no == "2" and special_annotations and not box_items),
     )
 
+    extra_height = 0
     if trip_no == "2" and special_annotations:
-        draw_trip2_special_box(
+        extra_height = draw_trip2_special_box(
             canv=canv,
             annotations=special_annotations,
             x=x,
@@ -1015,7 +1016,8 @@ def draw_trip_section(
             has_main_row=has_main_row,
         )
 
-    return current_y - 2
+    # リーデンが追加の行を使った場合、その分Y座標を下げる
+    return current_y - extra_height - 2
 
 
 def generate_shipping_order_pdf(
