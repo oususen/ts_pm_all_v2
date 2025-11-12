@@ -243,20 +243,23 @@ class KubotaKakuteiCSVImportService:
                 if existing_row and existing_row[1]:
                     previous_order_numbers = set(existing_row[1].split('+'))
 
-                order_prefix = f"KUBOTA-KAKUTEI-{delivery_date.strftime('%Y%m%d')}-{product_code}-{inspection_category}-"
-                order_id = f"KUBOTA-KAKUTEI-{delivery_date.strftime('%Y%m%d')}-{product_code}-{inspection_category}"
-
                 current_order_numbers = set(order_details.keys())
-                new_order_numbers = current_order_numbers - previous_order_numbers
-                addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers)
+                is_naiji_stub = existing_row is not None and not previous_order_numbers
 
-                if not existing_row:
+                if not existing_row or is_naiji_stub:
+                    addition_quantity = sum(order_details.values())
+                else:
+                    new_order_numbers = current_order_numbers - previous_order_numbers
+                    addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers)
+
+                if not existing_row or is_naiji_stub:
                     new_total = addition_quantity
                 else:
                     new_total = base_quantity + addition_quantity
 
-                combined_order_numbers = sorted(previous_order_numbers.union(current_order_numbers))
+                combined_order_numbers = sorted(previous_order_numbers.union(current_order_numbers)) if (previous_order_numbers or current_order_numbers) else []
                 order_numbers_str = '+'.join(combined_order_numbers) if combined_order_numbers else None
+                difference = new_total - base_quantity
 
                 session.execute(text("""
                     REPLACE INTO production_instructions_detail
@@ -278,13 +281,7 @@ class KubotaKakuteiCSVImportService:
                     'inspection_category': inspection_category
                 })
 
-                if within_window and addition_quantity != 0:
-                    changed_orders_set = set()
-                    if new_order_numbers:
-                        changed_orders_set = new_order_numbers
-                    elif current_order_numbers:
-                        changed_orders_set = current_order_numbers
-
+                if within_window and difference != 0:
                     self.latest_quantity_changes.append({
                         'product_code': product_code,
                         'product_name': item['product_name'] or product_code,
@@ -292,9 +289,9 @@ class KubotaKakuteiCSVImportService:
                         'instruction_date': delivery_date,
                         'previous_quantity': base_quantity,
                         'new_quantity': new_total,
-                        'difference': addition_quantity,
+                        'difference': difference,
                         'order_type': '確定',
-                        'order_numbers': sorted(changed_orders_set) or sorted(current_order_numbers)
+                        'order_numbers': sorted(current_order_numbers) if current_order_numbers else []
                     })
 
                 instruction_count += 1
