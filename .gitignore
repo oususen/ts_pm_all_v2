@@ -75,6 +75,9 @@ output/
 # Streamlit設定（シークレット）
 .streamlit/secrets.toml
 
+# Claude Code ローカル設定
+.claude/settings.local.json
+
 # Docker（オプション：Docker設定は共有する場合コメントアウト）
 # Dockerfile
 # docker-compose.yml
