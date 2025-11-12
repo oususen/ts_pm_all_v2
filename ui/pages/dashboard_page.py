@@ -75,83 +75,60 @@ class DashboardPage:
                 products_df = filter_params.get('products_df')
 
                 st.caption(f"📅 期間: {start_date.strftime('%Y/%m/%d')} ～ {end_date.strftime('%Y/%m/%d')} のデータを表示（マトリックスフィルタ適用）")
-
-                # 期間でフィルタした生産指示を取得
-                instructions = self.service.get_production_instructions(start_date, end_date)
+                # 期間でフィルタした納入進度を取得
+                progress_df = None
+                if self.transport_service:
+                    progress_df = self.transport_service.get_delivery_progress(start_date, end_date)
+                if progress_df is None or progress_df.empty:
+                    progress_df = pd.DataFrame()
             else:
-                instructions = self.service.get_production_instructions()
-
-            if instructions:
-                # DataFrameに変換
-                instructions_df = pd.DataFrame([{
-                    'instruction_date': inst.instruction_date,
-                    'instruction_quantity': inst.instruction_quantity,
-                    'product_code': inst.product_code,
-                    'product_name': inst.product_name
-                } for inst in instructions])
-
-                # フィルタパラメータがある場合、追加のフィルタリングを適用
-                if filter_params and not instructions_df.empty:
-                    # 製品コードでフィルタ
+                # 納入進度（全期間）
+                progress_df = None
+                if self.transport_service:
+                    progress_df = self.transport_service.get_delivery_progress()
+                if progress_df is None or progress_df.empty:
+                    progress_df = pd.DataFrame()
+            if progress_df is not None and not progress_df.empty:
+                # 追加フィルタリング
+                if filter_params:
                     if selected_products:
-                        instructions_df = instructions_df[
-                            instructions_df['product_code'].isin(selected_products)
-                        ]
+                        progress_df = progress_df[progress_df['product_code'].isin(selected_products)]
 
-                    # 製品群でフィルタ（products_dfと結合が必要）
-                    if selected_groups and products_df is not None:
-                        # 製品群マップを作成
-                        product_groups_df = self.service.get_all_product_groups(include_inactive=True)
-                        if product_groups_df is not None and not product_groups_df.empty:
-                            product_group_map = dict(zip(product_groups_df['id'], product_groups_df['group_name']))
-                            products_df['製品群'] = products_df['product_group_id'].apply(
-                                lambda x: product_group_map.get(x, '未設定') if pd.notna(x) else '未設定'
-                            )
+                    if selected_groups:
+                        if 'product_group_name' in progress_df.columns:
+                            progress_df = progress_df[progress_df['product_group_name'].isin(selected_groups)]
+                        elif products_df is not None:
+                            filtered_products = products_df[products_df['製品群'].isin(selected_groups)]['product_code'].unique()
+                            progress_df = progress_df[progress_df['product_code'].isin(filtered_products)]
 
-                            # 選択された製品群に属する製品コードを取得
-                            filtered_products = products_df[
-                                products_df['製品群'].isin(selected_groups)
-                            ]['product_code'].unique()
-
-                            instructions_df = instructions_df[
-                                instructions_df['product_code'].isin(filtered_products)
-                            ]
-
-                    # 検査区分でフィルタ（products_dfと結合が必要）
                     if selected_inspections and products_df is not None:
                         filtered_products = products_df[
                             products_df['inspection_category'].isin(selected_inspections)
                         ]['product_code'].unique()
+                        progress_df = progress_df[progress_df['product_code'].isin(filtered_products)]
 
-                        instructions_df = instructions_df[
-                            instructions_df['product_code'].isin(filtered_products)
-                        ]
-
-                # 稼働日のみにフィルタ
-                if not instructions_df.empty and self.db_manager:
-                    min_date = instructions_df['instruction_date'].min()
-                    max_date = instructions_df['instruction_date'].max()
-
-                    # 稼働日リストを取得
+                # 稼働日フィルタ
+                if not progress_df.empty and self.db_manager:
+                    min_date = progress_df['delivery_date'].min()
+                    max_date = progress_df['delivery_date'].max()
                     working_days = self._get_working_days_list(min_date, max_date)
-
-                    # 稼働日のみにフィルタ
-                    instructions_df = instructions_df[
-                        instructions_df['instruction_date'].isin(working_days)
-                    ]
-
-                    if not instructions_df.empty:
+                    progress_df = progress_df[progress_df['delivery_date'].isin(working_days)]
+                    if not progress_df.empty:
                         st.caption(f"📅 稼働日のみ表示（土日祝日除外）")
 
-                # トレンドグラフ表示
-                fig = self.charts.create_demand_trend_chart(instructions_df)
+                # トレンドグラフ表示（delivery_progress参照）
+                fig = self.charts.create_delivery_progress_chart(progress_df)
                 if fig:
                     st.plotly_chart(fig, use_container_width=True)
                 
-                # 製品別需要
+                # 製品別需要（受注数ベース）
                 st.subheader("製品別需要分析")
-                product_demand = instructions_df.groupby(['product_code', 'product_name'])['instruction_quantity'].sum().reset_index()
-                product_demand = product_demand.sort_values('instruction_quantity', ascending=False)
+                value_col = 'order_quantity' if 'order_quantity' in progress_df.columns else None
+                if value_col:
+                    product_demand = progress_df.groupby(['product_code', 'product_name'])[value_col].sum().reset_index()
+                    product_demand = product_demand.sort_values(value_col, ascending=False)
+                else:
+                    product_demand = pd.DataFrame(columns=['product_code','product_name'])
                 
                 col1, col2 = st.columns([2, 1])
                 
@@ -161,10 +138,10 @@ class DashboardPage:
                         column_config={
                             "product_code": "製品コード",
                             "product_name": "製品名", 
-                            "instruction_quantity": st.column_config.NumberColumn(
+                            (value_col if value_col else "product_name"): st.column_config.NumberColumn(
                                 "需要数量",
                                 format="%d"
-                            )
+                            ) if value_col else None
                         },
                         use_container_width=True
                     )
@@ -173,10 +150,11 @@ class DashboardPage:
                     st.write("**需要トップ5**")
                     top_products = product_demand.head()
                     for _, product in top_products.iterrows():
-                        st.write(f"• {product['product_name']}: {product['instruction_quantity']:,.0f}")
+                        qty = product[value_col] if value_col else 0
+                        st.write(f"• {product['product_name']}: {qty:,.0f}")
                         
             else:
-                st.warning("生産指示データがありません")
+                st.warning("納入進度データがありません")
                 
         except Exception as e:
             st.error(f"グラフ表示エラー: {e}")

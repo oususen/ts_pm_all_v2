@@ -84,3 +84,58 @@ class ChartComponents:
         fig.update_yaxes(title_text="数量", row=2, col=1)
         
         return fig
+
+    @staticmethod
+    def create_delivery_progress_chart(progress_df: pd.DataFrame):
+        """納入進度トレンドチャート作成（delivery_progress参照）"""
+        if progress_df is None or progress_df.empty:
+            return None
+
+        # 集計（納期日ごと）
+        cols = {}
+        if 'order_quantity' in progress_df.columns:
+            cols['order_quantity'] = 'sum'
+        if 'planned_quantity' in progress_df.columns:
+            cols['planned_quantity'] = 'sum'
+        if 'shipped_quantity' in progress_df.columns:
+            cols['shipped_quantity'] = 'sum'
+
+        if not cols:
+            return None
+
+        daily = progress_df.groupby('delivery_date').agg(cols).reset_index()
+
+        def format_date_jp(dt):
+            if pd.isna(dt):
+                return ''
+            dt = pd.to_datetime(dt)
+            return f"{dt.month}月{dt.day}日"
+
+        daily['日付'] = daily['delivery_date'].apply(format_date_jp)
+
+        fig = go.Figure()
+        if 'order_quantity' in daily.columns:
+            fig.add_trace(go.Scatter(
+                x=daily['日付'], y=daily['order_quantity'], name='受注数',
+                mode='lines+markers', line=dict(color='red')
+            ))
+        if 'planned_quantity' in daily.columns:
+            fig.add_trace(go.Scatter(
+                x=daily['日付'], y=daily['planned_quantity'], name='計画数',
+                mode='lines+markers', line=dict(color='blue')
+            ))
+        if 'shipped_quantity' in daily.columns:
+            fig.add_trace(go.Scatter(
+                x=daily['日付'], y=daily['shipped_quantity'], name='出荷実績',
+                mode='lines+markers', line=dict(color='green')
+            ))
+
+        fig.update_layout(
+            title='日次 納入進度トレンド',
+            xaxis_title='日付',
+            yaxis_title='数量',
+            showlegend=True
+        )
+        fig.update_xaxes(tickangle=-45)
+
+        return fig
