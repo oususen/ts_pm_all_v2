@@ -8,6 +8,8 @@ from datetime import date
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import re
+import math
+from fractions import Fraction
 from repository.database_manager import DatabaseManager
 from sqlalchemy import text
 
@@ -172,74 +174,114 @@ class ShippingOrderService:
         if not trip1_data:
             return []
 
-        # 各製品の容器数を計算
-        product_containers = []
-        total_containers = 0
+        # 各製品の「使用コンテナ数」（小数含む）を算出
+        normalized_products = []
+        total_container_usage = Fraction(0, 1)
 
         for item in trip1_data:
-            capacity = item.get('capacity', 1)
+            capacity = int(item.get('capacity') or 0)
             if capacity <= 0:
                 capacity = 1
 
-            qty = item['order_quantity']
-            containers = -(-qty // capacity)  # 切り上げ
-            total_containers += containers
+            qty = int(item.get('order_quantity') or 0)
+            if qty < 0:
+                qty = 0
 
-            product_containers.append({
+            container_usage = Fraction(qty, capacity)
+            total_container_usage += container_usage
+
+            normalized_products.append({
                 'item': item,
                 'original_qty': qty,
                 'capacity': capacity,
-                'containers': containers
+                'container_usage': container_usage
             })
 
-        # 目標容器数を計算（1便目が多くなるように）
-        target_trip1_containers = -(-total_containers // 2)  # 切り上げ
+        # 容器は整数個なので切り上げ
+        total_containers = math.ceil(total_container_usage)
 
-        # 1便目と4便目に振り分け
-        trip1_actual_containers = 0
+        # 目標容器数（1便目がやや多め）
+        target_trip1_containers = math.ceil(total_containers / 2)
+
+        # 1便目と4便目に振り分け（コンテナを共有する前提で小数管理）
+        trip1_usage = Fraction(0, 1)
         trip4_data = []
 
-        for prod_info in product_containers:
+        for prod_info in normalized_products:
             item = prod_info['item']
             original_qty = prod_info['original_qty']
             capacity = prod_info['capacity']
-            containers = prod_info['containers']
+            if original_qty <= 0:
+                # 0台の場合も表示整合のため4便目へコピー
+                item_copy = item.copy()
+                item_copy['order_quantity'] = 0
+                trip4_data.append(item_copy)
+                continue
 
-            # まだ1便目の目標に達していない場合
-            if trip1_actual_containers < target_trip1_containers:
-                # この製品を1便目に追加しても目標を超えない場合は全て1便目へ
-                if trip1_actual_containers + containers <= target_trip1_containers:
-                    # 1便目に全量
-                    item['order_quantity'] = original_qty
-                    # 4便目には0
-                    item_copy = item.copy()
-                    item_copy['order_quantity'] = 0
-                    trip4_data.append(item_copy)
-                    trip1_actual_containers += containers
-                else:
-                    # 1便目の目標まで割り当て、残りを4便目へ
-                    remaining_trip1_containers = target_trip1_containers - trip1_actual_containers
+            remaining_container_quota = Fraction(target_trip1_containers, 1) - trip1_usage
 
-                    # 1便目の個数を計算
-                    trip1_qty = remaining_trip1_containers * capacity
-                    trip1_qty = min(trip1_qty, original_qty)
-
-                    # 4便目は残り
-                    trip4_qty = original_qty - trip1_qty
-
-                    item['order_quantity'] = trip1_qty
-
-                    item_copy = item.copy()
-                    item_copy['order_quantity'] = trip4_qty
-                    trip4_data.append(item_copy)
-
-                    trip1_actual_containers += remaining_trip1_containers
-            else:
-                # 既に1便目の目標に達している場合は全て4便目へ
+            if remaining_container_quota <= 0:
+                # 1便目の枠がないため全量を4便目へ
                 item['order_quantity'] = 0
                 item_copy = item.copy()
                 item_copy['order_quantity'] = original_qty
                 trip4_data.append(item_copy)
+                continue
+
+            # 小数コンテナ枠を製品ごとの数量へ換算
+            max_qty_for_trip1 = int(remaining_container_quota * capacity)
+            max_qty_for_trip1 = min(original_qty, max_qty_for_trip1)
+
+            if max_qty_for_trip1 <= 0:
+                # 利用可能な枠が1台分に満たない場合
+                item['order_quantity'] = 0
+                item_copy = item.copy()
+                item_copy['order_quantity'] = original_qty
+                trip4_data.append(item_copy)
+                continue
+
+            trip4_qty = original_qty - max_qty_for_trip1
+            item['order_quantity'] = max_qty_for_trip1
+
+            item_copy = item.copy()
+            item_copy['order_quantity'] = trip4_qty
+            trip4_data.append(item_copy)
+
+            trip1_usage += Fraction(max_qty_for_trip1, capacity)
+
+        # 1便目の枠が余った場合は残りを順次追加（余剰を解消）
+        if trip1_usage < target_trip1_containers:
+            remaining_quota = Fraction(target_trip1_containers, 1) - trip1_usage
+            for prod_info in normalized_products:
+                if remaining_quota <= 0:
+                    break
+
+                item = prod_info['item']
+                capacity = prod_info['capacity']
+                original_qty = prod_info['original_qty']
+                current_qty = item.get('order_quantity', 0)
+                remaining_qty = max(0, original_qty - current_qty)
+                if remaining_qty <= 0:
+                    continue
+
+                max_extra = int(remaining_quota * capacity)
+                if max_extra <= 0:
+                    continue
+
+                add_qty = min(remaining_qty, max_extra)
+                item['order_quantity'] += add_qty
+
+                # 対応する4便目レコードも減算
+                item_order_id = item.get('order_id')
+                for trip4_item in trip4_data:
+                    if trip4_item.get('order_id') == item_order_id:
+                        trip4_item['order_quantity'] = max(0, trip4_item['order_quantity'] - add_qty)
+                        break
+
+                trip1_usage += Fraction(add_qty, capacity)
+                remaining_quota = Fraction(target_trip1_containers, 1) - trip1_usage
+                if remaining_quota <= 0:
+                    break
 
         return trip4_data
 
