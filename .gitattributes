@@ -1,0 +1,29 @@
+# Normalize text files
+* text=auto
+
+# Enforce LF for source and config
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.csv text eol=lf
+*.tsv text eol=lf
+*.sql text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+
+# Windows scripts keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Images and other binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.jar binary

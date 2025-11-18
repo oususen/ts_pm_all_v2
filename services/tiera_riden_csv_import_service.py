@@ -1,14 +1,22 @@
 # app/services/tiera_riden_csv_import_service.py
-from typing import List, Dict, Tuple
-from datetime import datetime
+from typing import List, Dict, Tuple, Optional
+from datetime import datetime, timedelta
 from services.tiera_csv_import_service import TieraCSVImportService
 from sqlalchemy import text
+from repository.calendar_repository import CalendarRepository
+import unicodedata
 
 
 class TieraRidenCSVImportService(TieraCSVImportService):
     """ティエラ様（リーデン注文書）専用CSVインポートサービス"""
 
     HISTORY_PREFIX = "[ティエラ様・リーデン確定]"
+    DELIVERY_CODE_KEYWORDS = ("納入", "納入先")
+    DELIVERY_CODE_POSTFIXES = ("コード", "ｺｰﾄﾞ", "code", "cd")
+    LEAD_TIME_OVERRIDES = {
+        "000010": 2,
+        "000030": 2,
+    }
 
     COL_DRAWING_NO = 5       # 品目コード
     COL_DELIVERY_DATE = 9    # 納期
@@ -16,6 +24,10 @@ class TieraRidenCSVImportService(TieraCSVImportService):
     COL_PRODUCT_NAME_JP = 7  # 品目
     COL_PRODUCT_NAME_EN = 7  # 品目（英名なしのため同列を使用）
     COL_MODEL_NO = 6         # 型番（品目コードが空の際のフォールバック）
+
+    def __init__(self, db_manager):
+        super().__init__(db_manager)
+        self.calendar_repo = CalendarRepository(db_manager)
 
     def import_csv_data(self, uploaded_file,
                         create_progress: bool = True) -> Tuple[bool, str]:
@@ -36,6 +48,7 @@ class TieraRidenCSVImportService(TieraCSVImportService):
 
         fallback_col = None
         columns = df.columns.tolist()
+        delivery_code_col = self._find_delivery_code_column(columns)
         if len(columns) > self.COL_MODEL_NO:
             fallback_col = columns[self.COL_MODEL_NO]
 
@@ -50,6 +63,9 @@ class TieraRidenCSVImportService(TieraCSVImportService):
             quantity_str = str(row[quantity_col]).strip()
             product_name_jp = str(row[product_name_jp_col]).strip()
             product_name_en = str(row[product_name_en_col]).strip()
+            delivery_code = ''
+            if delivery_code_col and delivery_code_col in row.index:
+                delivery_code = self._normalize_delivery_code(str(row[delivery_code_col]).strip())
 
             if product_name_jp == 'nan':
                 product_name_jp = ''
@@ -79,7 +95,8 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                 'product_name_jp': product_name_jp,
                 'product_name_en': product_name_en or product_name_jp,
                 'delivery_date': delivery_date,
-                'quantity': quantity
+                'quantity': quantity,
+                'delivery_code': delivery_code
             })
 
         aggregated = {}
@@ -91,9 +108,12 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                     'product_name_jp': item['product_name_jp'],
                     'product_name_en': item['product_name_en'],
                     'delivery_date': item['delivery_date'],
-                    'quantity': 0
+                    'quantity': 0,
+                    'delivery_code': item.get('delivery_code', '')
                 }
             aggregated[key]['quantity'] += item['quantity']
+            if not aggregated[key].get('delivery_code') and item.get('delivery_code'):
+                aggregated[key]['delivery_code'] = item['delivery_code']
 
         result = list(aggregated.values())
         print(f"[リーデン] グループ数: {len(result)}件")
@@ -160,6 +180,8 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                 drawing_no = item['drawing_no']
                 delivery_date = item['delivery_date']
                 quantity = item['quantity']
+                delivery_code = (item.get('delivery_code') or '').strip()
+                shipping_date = self._calculate_shipping_date(delivery_date, delivery_code)
 
                 product_id = product_ids.get(drawing_no)
                 if not product_id:
@@ -190,17 +212,21 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                 if existing:
                     session.execute(text("""
                         UPDATE delivery_progress
-                        SET order_quantity = :new_quantity,
+                        SET order_date = :order_date,
+                            order_quantity = :new_quantity,
                             order_type = :order_type,
                             order_number = :order_number,
+                            delivery_location = :delivery_location,
                             priority = :priority,
                             notes = :notes
                         WHERE id = :progress_id
                     """), {
                         'progress_id': existing[0],
+                        'order_date': shipping_date,
                         'new_quantity': quantity,
                         'order_type': '確定',
                         'order_number': None,
+                        'delivery_location': delivery_code or None,
                         'priority': 3,
                         'notes': f'ティエラ様図番（リーデン確定）: {drawing_no} (更新)'
                     })
@@ -209,21 +235,22 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                         INSERT INTO delivery_progress
                         (order_id, product_id, order_date, delivery_date,
                         order_quantity, shipped_quantity, status,
-                        customer_code, customer_name, order_type, order_number, priority, notes)
+                        customer_code, customer_name, order_type, order_number, delivery_location, priority, notes)
                         VALUES
                         (:order_id, :product_id, :order_date, :delivery_date,
                         :order_quantity, 0, '未出荷',
-                        :customer_code, :customer_name, :order_type, :order_number, :priority, :notes)
+                        :customer_code, :customer_name, :order_type, :order_number, :delivery_location, :priority, :notes)
                     """), {
                         'order_id': order_id,
                         'product_id': product_id,
-                        'order_date': delivery_date,
+                        'order_date': shipping_date,
                         'delivery_date': delivery_date,
                         'order_quantity': quantity,
                         'customer_code': 'TIERA_R',
                         'customer_name': 'ティエラ様（リーデン確定）',
                         'order_type': '確定',
                         'order_number': None,
+                        'delivery_location': delivery_code or None,
                         'priority': 3,
                         'notes': f'図番: {drawing_no} (リーデン確定CSV)'
                     })
@@ -276,3 +303,59 @@ class TieraRidenCSVImportService(TieraCSVImportService):
         if not value or value == 'nan':
             return ''
         return "".join(value.split())
+
+    @staticmethod
+    def _normalize_delivery_code(value: str) -> str:
+        if not value or value == 'nan':
+            return ''
+        normalized = unicodedata.normalize('NFKC', value)
+        normalized = normalized.replace('-', '').replace(' ', '').replace('　', '')
+        if normalized.isdigit():
+            normalized = normalized.zfill(6)
+        return normalized
+
+    def _find_delivery_code_column(self, columns: List[str]) -> Optional[str]:
+        for col in columns:
+            normalized = unicodedata.normalize('NFKC', str(col)).lower()
+            if any(keyword in normalized for keyword in self.DELIVERY_CODE_KEYWORDS):
+                if any(postfix in normalized for postfix in self.DELIVERY_CODE_POSTFIXES):
+                    return col
+            if 'delivery' in normalized and 'code' in normalized:
+                return col
+        return None
+
+    def _calculate_shipping_date(self, delivery_date: datetime, delivery_code: str) -> datetime:
+        normalized_code = self._normalize_delivery_code(delivery_code)
+        lead_days = self.LEAD_TIME_OVERRIDES.get(normalized_code, 0)
+        if lead_days <= 0:
+            return delivery_date
+
+        calendar_repo = getattr(self, 'calendar_repo', None)
+        if not calendar_repo:
+            return delivery_date - timedelta(days=lead_days)
+
+        return self._subtract_working_days(delivery_date, lead_days)
+
+    def _subtract_working_days(self, base_date: datetime, days: int) -> datetime:
+        if days <= 0:
+            return base_date
+
+        calendar_repo = getattr(self, 'calendar_repo', None)
+        if not calendar_repo:
+            return base_date - timedelta(days=days)
+
+        remaining = days
+        current = base_date
+
+        while remaining > 0:
+            current -= timedelta(days=1)
+            try:
+                is_working = calendar_repo.is_working_day(current)
+            except Exception:
+                # カレンダー取得で予期せぬ失敗があった場合は週末判定にフォールバック
+                is_working = current.weekday() < 5
+
+            if is_working:
+                remaining -= 1
+
+        return current
