@@ -5,6 +5,7 @@ from services.tiera_csv_import_service import TieraCSVImportService
 from sqlalchemy import text
 from repository.calendar_repository import CalendarRepository
 import unicodedata
+import traceback
 
 
 class TieraRidenCSVImportService(TieraCSVImportService):
@@ -18,6 +19,7 @@ class TieraRidenCSVImportService(TieraCSVImportService):
         "000030": 2,
     }
 
+    COL_ORDER_NUMBER = 0     # 発注番号
     COL_DRAWING_NO = 5       # 品目コード
     COL_DELIVERY_DATE = 9    # 納期
     COL_QUANTITY = 10        # 発注数量
@@ -49,6 +51,7 @@ class TieraRidenCSVImportService(TieraCSVImportService):
         fallback_col = None
         columns = df.columns.tolist()
         delivery_code_col = self._find_delivery_code_column(columns)
+        order_number_col = columns[self.COL_ORDER_NUMBER] if len(columns) > self.COL_ORDER_NUMBER else None
         if len(columns) > self.COL_MODEL_NO:
             fallback_col = columns[self.COL_MODEL_NO]
 
@@ -66,6 +69,12 @@ class TieraRidenCSVImportService(TieraCSVImportService):
             delivery_code = ''
             if delivery_code_col and delivery_code_col in row.index:
                 delivery_code = self._normalize_delivery_code(str(row[delivery_code_col]).strip())
+
+            order_number = ''
+            if order_number_col and order_number_col in row.index:
+                order_number = str(row[order_number_col]).strip()
+                if order_number == 'nan':
+                    order_number = ''
 
             if product_name_jp == 'nan':
                 product_name_jp = ''
@@ -96,7 +105,8 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                 'product_name_en': product_name_en or product_name_jp,
                 'delivery_date': delivery_date,
                 'quantity': quantity,
-                'delivery_code': delivery_code
+                'delivery_code': delivery_code,
+                'order_number': order_number
             })
 
         aggregated = {}
@@ -109,13 +119,25 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                     'product_name_en': item['product_name_en'],
                     'delivery_date': item['delivery_date'],
                     'quantity': 0,
-                    'delivery_code': item.get('delivery_code', '')
+                    'delivery_code': item.get('delivery_code', ''),
+                    'order_numbers': set(),
+                    'order_details': {}
                 }
             aggregated[key]['quantity'] += item['quantity']
             if not aggregated[key].get('delivery_code') and item.get('delivery_code'):
                 aggregated[key]['delivery_code'] = item['delivery_code']
 
-        result = list(aggregated.values())
+            # 発注番号を収集
+            order_number = item.get('order_number', '')
+            if order_number:
+                aggregated[key]['order_numbers'].add(order_number)
+                aggregated[key]['order_details'][order_number] = aggregated[key]['order_details'].get(order_number, 0) + item['quantity']
+
+        # order_numbersをソート済みリストに変換
+        result = []
+        for item in aggregated.values():
+            item['order_numbers'] = sorted(item['order_numbers'])
+            result.append(item)
         print(f"[リーデン] グループ数: {len(result)}件")
         return result
 
@@ -130,12 +152,48 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                 drawing_no = item['drawing_no']
                 delivery_date = item['delivery_date']
                 quantity = item['quantity']
+                order_details: Dict[str, int] = item.get('order_details', {})
 
                 product_id = product_ids.get(drawing_no)
                 if not product_id:
                     continue
 
                 year_month = delivery_date.strftime('%Y%m')
+
+                # 既存レコードから発注番号を取得
+                existing_row = session.execute(text("""
+                    SELECT instruction_quantity, order_number
+                    FROM production_instructions_detail
+                    WHERE product_id = :product_id
+                      AND instruction_date = :instruction_date
+                      AND inspection_category = :inspection_category
+                """), {
+                    'product_id': product_id,
+                    'instruction_date': delivery_date,
+                    'inspection_category': 'N'
+                }).fetchone()
+
+                base_quantity = int(existing_row[0]) if existing_row and existing_row[0] is not None else 0
+                previous_order_numbers = set()
+                if existing_row and existing_row[1]:
+                    previous_order_numbers = set(existing_row[1].split('+'))
+
+                current_order_numbers = set(order_details.keys())
+                is_naiji_stub = existing_row is not None and not previous_order_numbers
+
+                if not existing_row or is_naiji_stub:
+                    addition_quantity = sum(order_details.values()) if order_details else quantity
+                else:
+                    new_order_numbers = current_order_numbers - previous_order_numbers
+                    addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers) if new_order_numbers else 0
+
+                if not existing_row or is_naiji_stub:
+                    new_total = addition_quantity if order_details else quantity
+                else:
+                    new_total = base_quantity + addition_quantity
+
+                combined_order_numbers = sorted(previous_order_numbers.union(current_order_numbers)) if (previous_order_numbers or current_order_numbers) else []
+                order_numbers_str = '+'.join(combined_order_numbers) if combined_order_numbers else None
 
                 session.execute(text("""
                     REPLACE INTO production_instructions_detail
@@ -147,10 +205,10 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                     'product_id': product_id,
                     'record_type': 'TIERA',
                     'order_type': '確定',
-                    'order_number': None,
+                    'order_number': order_numbers_str,
                     'start_month': year_month,
                     'instruction_date': delivery_date,
-                    'quantity': quantity,
+                    'quantity': new_total,
                     'month_type': 'first',
                     'day_number': delivery_date.day,
                     'inspection_category': 'N'
@@ -169,9 +227,17 @@ class TieraRidenCSVImportService(TieraCSVImportService):
         finally:
             session.close()
 
+
     def _create_delivery_progress(self, grouped_data: List[Dict],
                                   product_ids: Dict) -> int:
         """確定受注として納入進捗を登録"""
+        
+        # 事前に出荷日を計算（カレンダーリポジトリのセッションがメイントランザクションに干渉しないように）
+        for item in grouped_data:
+            delivery_date = item['delivery_date']
+            delivery_code = (item.get('delivery_code') or '').strip()
+            item['shipping_date'] = self._calculate_shipping_date(delivery_date, delivery_code)
+        
         session = self.db.get_session()
         progress_count = 0
 
@@ -181,7 +247,8 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                 delivery_date = item['delivery_date']
                 quantity = item['quantity']
                 delivery_code = (item.get('delivery_code') or '').strip()
-                shipping_date = self._calculate_shipping_date(delivery_date, delivery_code)
+                shipping_date = item['shipping_date']  # 事前計算済みの値を使用
+                order_details: Dict[str, int] = item.get('order_details', {})
 
                 product_id = product_ids.get(drawing_no)
                 if not product_id:
@@ -200,14 +267,39 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                     'delivery_date': delivery_date,
                     'naiji_order_id': naiji_order_id
                 }).rowcount
-
                 if deleted_rows > 0:
                     print(f"[リーデン] 内示データ削除: {drawing_no} 納期={delivery_date}")
 
+                # 既存レコードのチェック
                 existing = session.execute(text("""
-                    SELECT id FROM delivery_progress
+                    SELECT id, order_quantity, order_number
+                    FROM delivery_progress
                     WHERE order_id = :order_id
                 """), {'order_id': order_id}).fetchone()
+
+                existing_qty_value = 0
+                existing_order_numbers = set()
+                if existing:
+                    if existing[1] is not None:
+                        existing_qty_value = int(existing[1])
+                    if existing[2]:
+                        existing_order_numbers = set(existing[2].split('+'))
+
+                current_order_numbers = set(order_details.keys())
+                new_order_numbers = current_order_numbers - existing_order_numbers
+                addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers) if new_order_numbers else 0
+
+                if existing:
+                    total_quantity = existing_qty_value + addition_quantity
+                else:
+                    total_quantity = addition_quantity if order_details else quantity
+
+                combined_order_numbers = sorted(existing_order_numbers.union(current_order_numbers))
+                order_numbers_str = '+'.join(combined_order_numbers) if combined_order_numbers else None
+
+                notes_base = f'図番: {drawing_no} (リーデン確定CSV)'
+                if order_numbers_str:
+                    notes_base += f' / 発注番号: {order_numbers_str}'
 
                 if existing:
                     session.execute(text("""
@@ -223,37 +315,42 @@ class TieraRidenCSVImportService(TieraCSVImportService):
                     """), {
                         'progress_id': existing[0],
                         'order_date': shipping_date,
-                        'new_quantity': quantity,
+                        'new_quantity': total_quantity,
                         'order_type': '確定',
-                        'order_number': None,
+                        'order_number': order_numbers_str,
                         'delivery_location': delivery_code or None,
                         'priority': 3,
-                        'notes': f'ティエラ様図番（リーデン確定）: {drawing_no} (更新)'
+                        'notes': notes_base + ' (更新)'
                     })
                 else:
-                    session.execute(text("""
-                        INSERT INTO delivery_progress
-                        (order_id, product_id, order_date, delivery_date,
-                        order_quantity, shipped_quantity, status,
-                        customer_code, customer_name, order_type, order_number, delivery_location, priority, notes)
-                        VALUES
-                        (:order_id, :product_id, :order_date, :delivery_date,
-                        :order_quantity, 0, '未出荷',
-                        :customer_code, :customer_name, :order_type, :order_number, :delivery_location, :priority, :notes)
-                    """), {
-                        'order_id': order_id,
-                        'product_id': product_id,
-                        'order_date': shipping_date,
-                        'delivery_date': delivery_date,
-                        'order_quantity': quantity,
-                        'customer_code': 'TIERA_R',
-                        'customer_name': 'ティエラ様（リーデン確定）',
-                        'order_type': '確定',
-                        'order_number': None,
-                        'delivery_location': delivery_code or None,
-                        'priority': 3,
-                        'notes': f'図番: {drawing_no} (リーデン確定CSV)'
-                    })
+                    try:
+                        session.execute(text("""
+                            INSERT INTO delivery_progress
+                            (order_id, product_id, order_date, delivery_date,
+                            order_quantity, shipped_quantity, status,
+                            customer_code, customer_name, order_type, order_number, delivery_location, priority, notes)
+                            VALUES
+                            (:order_id, :product_id, :order_date, :delivery_date,
+                            :order_quantity, 0, '未出荷',
+                            :customer_code, :customer_name, :order_type, :order_number, :delivery_location, :priority, :notes)
+                        """), {
+                            'order_id': order_id,
+                            'product_id': product_id,
+                            'order_date': shipping_date,
+                            'delivery_date': delivery_date,
+                            'order_quantity': total_quantity,
+                            'customer_code': 'TIERA_R',
+                            'customer_name': 'ティエラ様（リーデン確定）',
+                            'order_type': '確定',
+                            'order_number': order_numbers_str,
+                            'delivery_location': delivery_code or None,
+                            'priority': 3,
+                            'notes': notes_base
+                        })
+                    except Exception:
+                        import traceback
+                        traceback.print_exc()
+                        raise
 
                 progress_count += 1
 
@@ -264,6 +361,8 @@ class TieraRidenCSVImportService(TieraCSVImportService):
         except Exception as e:
             session.rollback()
             print(f"[リーデン] 納入進捗登録エラー: {e}")
+            import traceback
+            traceback.print_exc()
             return 0
         finally:
             session.close()
