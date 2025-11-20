@@ -19,6 +19,7 @@ class TieraKakuteiCSVImportService:
     HISTORY_PREFIX = "[ティエラ様・確定CSV]"
 
     # 列インデックス定義
+    COL_ORDER_NUMBER = 7     # 発注番号
     COL_DRAWING_NO = 11      # 図番
     COL_DELIVERY_DATE = 13   # 納期
     COL_QUANTITY = 15        # 数量
@@ -47,6 +48,7 @@ class TieraKakuteiCSVImportService:
                 return False, f"列数が不足しています（必要: 47列以上、実際: {len(column_names)}列）"
 
             # 図番列名を取得（文字化け対策）
+            order_number_col = column_names[self.COL_ORDER_NUMBER]
             drawing_col = column_names[self.COL_DRAWING_NO]
             delivery_col = column_names[self.COL_DELIVERY_DATE]
             quantity_col = column_names[self.COL_QUANTITY]
@@ -60,6 +62,7 @@ class TieraKakuteiCSVImportService:
             # データをグループ化（図番 × 納期 ごとに集約）
             grouped_data = self._group_by_product_and_date(
                 df,
+                order_number_col,
                 drawing_col,
                 delivery_col,
                 quantity_col,
@@ -93,6 +96,7 @@ class TieraKakuteiCSVImportService:
             return False, error_msg
 
     def _group_by_product_and_date(self, df: pd.DataFrame,
+                                   order_number_col: str,
                                    drawing_col: str,
                                    delivery_col: str,
                                    quantity_col: str,
@@ -102,6 +106,7 @@ class TieraKakuteiCSVImportService:
         grouped_data = []
 
         for _, row in df.iterrows():
+            order_number = str(row[order_number_col]).strip()
             drawing_no = str(row[drawing_col]).strip()
             delivery_date_str = str(row[delivery_col]).strip()
             quantity_str = str(row[quantity_col]).strip()
@@ -109,6 +114,8 @@ class TieraKakuteiCSVImportService:
             product_name_en = str(row[product_name_en_col]).strip()
 
             # 'nan' を空文字列に変換
+            if order_number == 'nan' or not order_number:
+                order_number = ''
             if product_name_jp == 'nan' or not product_name_jp:
                 product_name_jp = ''
             if product_name_en == 'nan' or not product_name_en:
@@ -141,7 +148,8 @@ class TieraKakuteiCSVImportService:
                 'product_name_jp': product_name_jp,
                 'product_name_en': product_name_en,
                 'delivery_date': delivery_date,
-                'quantity': quantity
+                'quantity': quantity,
+                'order_number': order_number
             })
 
         # 図番 × 納期 で集約
@@ -154,11 +162,23 @@ class TieraKakuteiCSVImportService:
                     'product_name_jp': item['product_name_jp'],
                     'product_name_en': item['product_name_en'],
                     'delivery_date': item['delivery_date'],
-                    'quantity': 0
+                    'quantity': 0,
+                    'order_numbers': set(),
+                    'order_details': {}
                 }
             aggregated[key]['quantity'] += item['quantity']
 
-        result = list(aggregated.values())
+            # 発注番号を収集
+            order_number = item.get('order_number', '')
+            if order_number:
+                aggregated[key]['order_numbers'].add(order_number)
+                aggregated[key]['order_details'][order_number] = aggregated[key]['order_details'].get(order_number, 0) + item['quantity']
+
+        # order_numbersをソート済みリストに変換
+        result = []
+        for item in aggregated.values():
+            item['order_numbers'] = sorted(item['order_numbers'])
+            result.append(item)
         print(f"✅ グループ化後: {len(result)}件のユニークデータ（確定CSV）")
         return result
 
@@ -240,6 +260,7 @@ class TieraKakuteiCSVImportService:
                 drawing_no = item['drawing_no']
                 delivery_date = item['delivery_date']
                 quantity = item['quantity']
+                order_details: Dict[str, int] = item.get('order_details', {})
 
                 product_id = product_ids.get(drawing_no)
                 if not product_id:
@@ -247,6 +268,41 @@ class TieraKakuteiCSVImportService:
 
                 # 月情報を計算
                 year_month = delivery_date.strftime('%Y%m')
+
+                # 既存レコードから発注番号を取得
+                existing_row = session.execute(text("""
+                    SELECT instruction_quantity, order_number
+                    FROM production_instructions_detail
+                    WHERE product_id = :product_id
+                      AND instruction_date = :instruction_date
+                      AND inspection_category = :inspection_category
+                """), {
+                    'product_id': product_id,
+                    'instruction_date': delivery_date,
+                    'inspection_category': 'N'
+                }).fetchone()
+
+                base_quantity = int(existing_row[0]) if existing_row and existing_row[0] is not None else 0
+                previous_order_numbers = set()
+                if existing_row and existing_row[1]:
+                    previous_order_numbers = set(existing_row[1].split('+'))
+
+                current_order_numbers = set(order_details.keys())
+                is_naiji_stub = existing_row is not None and not previous_order_numbers
+
+                if not existing_row or is_naiji_stub:
+                    addition_quantity = sum(order_details.values()) if order_details else quantity
+                else:
+                    new_order_numbers = current_order_numbers - previous_order_numbers
+                    addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers) if new_order_numbers else 0
+
+                if not existing_row or is_naiji_stub:
+                    new_total = addition_quantity if order_details else quantity
+                else:
+                    new_total = base_quantity + addition_quantity
+
+                combined_order_numbers = sorted(previous_order_numbers.union(current_order_numbers)) if (previous_order_numbers or current_order_numbers) else []
+                order_numbers_str = '+'.join(combined_order_numbers) if combined_order_numbers else None
 
                 # 生産指示データを登録
                 session.execute(text("""
@@ -259,10 +315,10 @@ class TieraKakuteiCSVImportService:
                     'product_id': product_id,
                     'record_type': 'TIERA',  # 確定CSVであることを示す
                     'order_type': '確定',
-                    'order_number': None,
+                    'order_number': order_numbers_str,
                     'start_month': year_month,
                     'instruction_date': delivery_date,
-                    'quantity': quantity,
+                    'quantity': new_total,
                     'month_type': 'first',
                     'day_number': delivery_date.day,
                     'inspection_category': 'N'
@@ -292,6 +348,7 @@ class TieraKakuteiCSVImportService:
                 drawing_no = item['drawing_no']
                 delivery_date = item['delivery_date']
                 quantity = item['quantity']
+                order_details: Dict[str, int] = item.get('order_details', {})
 
                 product_id = product_ids.get(drawing_no)
                 if not product_id:
@@ -320,9 +377,33 @@ class TieraKakuteiCSVImportService:
 
                 # 既存の確定データをチェック
                 existing = session.execute(text("""
-                    SELECT id, order_quantity FROM delivery_progress
+                    SELECT id, order_quantity, order_number FROM delivery_progress
                     WHERE order_id = :order_id
                 """), {'order_id': order_id}).fetchone()
+
+                existing_qty_value = 0
+                existing_order_numbers = set()
+                if existing:
+                    if existing[1] is not None:
+                        existing_qty_value = int(existing[1])
+                    if existing[2]:
+                        existing_order_numbers = set(existing[2].split('+'))
+
+                current_order_numbers = set(order_details.keys())
+                new_order_numbers = current_order_numbers - existing_order_numbers
+                addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers) if new_order_numbers else 0
+
+                if existing:
+                    total_quantity = existing_qty_value + addition_quantity
+                else:
+                    total_quantity = addition_quantity if order_details else quantity
+
+                combined_order_numbers = sorted(existing_order_numbers.union(current_order_numbers))
+                order_numbers_str = '+'.join(combined_order_numbers) if combined_order_numbers else None
+
+                notes_base = f'図番: {drawing_no} (確定CSV)'
+                if order_numbers_str:
+                    notes_base += f' / 発注番号: {order_numbers_str}'
 
                 if existing:
                     # 更新
@@ -335,10 +416,10 @@ class TieraKakuteiCSVImportService:
                         WHERE id = :progress_id
                     """), {
                         'progress_id': existing[0],
-                        'new_quantity': quantity,
+                        'new_quantity': total_quantity,
                         'order_type': '確定',
-                        'order_number': None,
-                        'notes': f'ティエラ様図番（確定）: {drawing_no} (更新)'
+                        'order_number': order_numbers_str,
+                        'notes': notes_base + ' (更新)'
                     })
                 else:
                     # 新規登録
@@ -356,12 +437,12 @@ class TieraKakuteiCSVImportService:
                         'product_id': product_id,
                         'order_date': delivery_date,
                         'delivery_date': delivery_date,
-                        'order_quantity': quantity,
+                        'order_quantity': total_quantity,
                         'customer_code': 'TIERA_K',
                         'customer_name': 'ティエラ様（確定）',
                         'order_type': '確定',
-                        'order_number': None,
-                        'notes': f'図番: {drawing_no} (確定CSV)'
+                        'order_number': order_numbers_str,
+                        'notes': notes_base
                     })
 
                 progress_count += 1
