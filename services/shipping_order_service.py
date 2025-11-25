@@ -200,8 +200,8 @@ class ShippingOrderService:
         # 容器は整数個なので切り上げ
         total_containers = math.ceil(total_container_usage)
 
-        # 目標容器数（1便目がやや多め）
-        target_trip1_containers = math.ceil(total_containers / 2)
+        # 目標容器数（4便目がやや多め）
+        target_trip1_containers = math.floor(total_containers / 2)
 
         # 1便目と4便目に振り分け（コンテナを共有する前提で小数管理）
         trip1_usage = Fraction(0, 1)
