@@ -107,6 +107,7 @@ def _get_available_pages(auth_service) -> List[str]:
             "配送便計画",
             "納入進度",
             "📋 出荷指示書",
+            "📦 枚方集荷依頼書",
             "📅 会社カレンダー",
             "🔐 パスワード変更"
         ]
@@ -114,6 +115,15 @@ def _get_available_pages(auth_service) -> List[str]:
     # ユーザーの権限に基づいてページをフィルタリング
     user = st.session_state.get('user')
     user_pages = auth_service.get_user_pages(user['id'])
+
+    # 権限情報をセッションステートに保存（各ページで使用）
+    permissions = {}
+    for page in user_pages:
+        permissions[page['page_name']] = {
+            'can_view': page['can_view'],
+            'can_edit': page['can_edit']
+        }
+    st.session_state['permissions'] = permissions
 
     available_pages = [p['page_name'] for p in user_pages if p['can_view']]
 

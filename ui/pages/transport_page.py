@@ -1466,6 +1466,7 @@ class TransportPage:
                             col_a, col_b = st.columns(2)
                             
                             with col_a:
+                                new_container_code = st.text_input("容器コード", value=container.container_code)
                                 new_name = st.text_input("容器名", value=container.name)
                                 new_width = st.number_input("幅 (mm)", min_value=1, value=container.width)
                                 new_depth = st.number_input("奥行 (mm)", min_value=1, value=container.depth)
@@ -1484,6 +1485,8 @@ class TransportPage:
                             submitted = st.form_submit_button("更新", type="primary", disabled=not can_edit)
                             if submitted:
                                 update_data = {
+                                    "container_code": new_container_code,
+                                    # "container_code": new_container_code.strip() if new_container_code else None,
                                     "name": new_name,
                                     "width": new_width,
                                     "depth": new_depth,

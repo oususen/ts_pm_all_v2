@@ -20,6 +20,7 @@ from ui.pages.change_password_page import ChangePasswordPage
 from config_all import APP_CONFIG
 from ui.pages.calendar_page import CalendarPage
 from ui.pages.shipping_order_page import ShippingOrderPage
+from ui.pages.hirakata_pickup_page import HirakataPickupPage
 
 class ProductionPlanningApp:
     """生産計画アプリケーション - メイン制御クラス"""
@@ -110,6 +111,7 @@ class ProductionPlanningApp:
             "配送便計画": transport_page,  # ✅ 顧客別のTransportPage
             "納入進度": DeliveryProgressPage(self.transport_service, self.auth_service),
             "📋 出荷指示書": ShippingOrderPage(self.db),
+            "📦 枚方集荷依頼書": HirakataPickupPage(self.db, self.auth_service),
             "📅 会社カレンダー": CalendarPage(self.db, self.auth_service),
             "🔐 パスワード変更": ChangePasswordPage(self.auth_service),
             "ユーザー管理": UserManagementPage(self.auth_service),

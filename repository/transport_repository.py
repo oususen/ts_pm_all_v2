@@ -19,7 +19,7 @@ class TransportRepository:
         try:
             query = text("""
                 SELECT 
-                    id, name, width, depth, height, 
+                    id, name, container_code, width, depth, height, 
                     max_weight, max_volume, can_mix, 
                     stackable, max_stack, created_at
                 FROM container_capacity
@@ -36,15 +36,16 @@ class TransportRepository:
                 container = SimpleNamespace(
                     id=row[0],
                     name=row[1],
-                    width=row[2],
-                    depth=row[3],
-                    height=row[4],
-                    max_weight=row[5],
-                    max_volume=row[6],
-                    can_mix=row[7],
-                    stackable=bool(row[8]) if row[8] is not None else False,
-                    max_stack=row[9] if row[9] is not None else 1,
-                    created_at=row[10]
+                    container_code=row[2],
+                    width=row[3],
+                    depth=row[4],
+                    height=row[5],
+                    max_weight=row[6],
+                    max_volume=row[7],
+                    can_mix=row[8],
+                    stackable=bool(row[9]) if row[9] is not None else False,
+                    max_stack=row[10] if row[10] is not None else 1,
+                    created_at=row[11]
                 )
                 containers.append(container)
             

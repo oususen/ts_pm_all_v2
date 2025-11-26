@@ -15,6 +15,7 @@ class Container(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(50), nullable=False)
+    container_code = Column(String(20), nullable=True)  # 容器コード
     width = Column(Integer, nullable=False)   # mm
     depth = Column(Integer, nullable=False)   # mm
     height = Column(Integer, nullable=False)  # mm
@@ -26,7 +27,11 @@ class Container(Base):
     max_stack = Column(Integer, default=1)
 
     def __repr__(self):
-        return f"<Container(id={self.id}, name='{self.name}', size={self.width}x{self.depth}x{self.height}, max_weight={self.max_weight}, max_volume={self.max_volume}, can_mix={self.can_mix})>"
+        return (
+            f"<Container(id={self.id}, code='{self.container_code}', "
+            f"name='{self.name}', size={self.width}x{self.depth}x{self.height}, "
+            f"max_weight={self.max_weight}, max_volume={self.max_volume}, can_mix={self.can_mix})>"
+        )
 
 
 class Truck(Base):

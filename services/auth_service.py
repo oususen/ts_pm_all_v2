@@ -111,6 +111,7 @@ class AuthService:
                     {'page_name': '配送便計画', 'can_view': True, 'can_edit': True},
                     {'page_name': '納入進度', 'can_view': True, 'can_edit': True},
                     {'page_name': '📋 出荷指示書', 'can_view': True, 'can_edit': True},
+                    {'page_name': '📦 枚方集荷依頼書', 'can_view': True, 'can_edit': True},
                     {'page_name': '📅 会社カレンダー', 'can_view': True, 'can_edit': True},
                     {'page_name': '🔐 パスワード変更', 'can_view': True, 'can_edit': True},
                     {'page_name': 'ユーザー管理', 'can_view': True, 'can_edit': True}

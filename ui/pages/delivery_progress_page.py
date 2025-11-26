@@ -627,10 +627,16 @@ class DeliveryProgressPage:
             result_rows.extend([order_row, planned_row, planned_progress_row, shipped_row, progress_row, keisen_row])
         
         # DataFrameに変換
+        if not result_rows:
+            st.info("表示するデータがありません")
+            return
+        
         result_df = pd.DataFrame(result_rows)
         
-        # カラムの順序を整理
+        # カラムの順序を整理（存在するカラムのみ）
         columns = ['製品コード', '状態', 'row_type'] + date_columns
+        # 存在しないカラムを除外
+        columns = [col for col in columns if col in result_df.columns]
         result_df = result_df[columns]
         
         st.write("---")

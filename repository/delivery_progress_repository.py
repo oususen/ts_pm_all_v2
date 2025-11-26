@@ -59,6 +59,7 @@ class DeliveryProgressRepository:
                     LEFT JOIN product_groups pg ON p.product_group_id = pg.id
                     WHERE dp.delivery_date BETWEEN :start_date AND :end_date
                     AND dp.status != 'キャンセル'
+                    AND (dp.customer_code IS NULL OR dp.customer_code != 'HIRAKATA_K')
                     ORDER BY dp.delivery_date, dp.priority
                 """)
                 result = session.execute(query, {
@@ -96,6 +97,7 @@ class DeliveryProgressRepository:
                     LEFT JOIN products p ON dp.product_id = p.id
                     LEFT JOIN product_groups pg ON p.product_group_id = pg.id
                     WHERE dp.status != 'キャンセル'
+                    AND (dp.customer_code IS NULL OR dp.customer_code != 'HIRAKATA_K')
                     ORDER BY dp.delivery_date, dp.priority
                 """)
                 result = session.execute(query)
@@ -430,6 +432,7 @@ class DeliveryProgressRepository:
                     SUM(remaining_quantity) as total_remaining
                 FROM delivery_progress
                 WHERE status != 'キャンセル'
+                AND (customer_code IS NULL OR customer_code != 'HIRAKATA_K')
             """)
             
             result = session.execute(query).fetchone()
@@ -471,6 +474,7 @@ class DeliveryProgressRepository:
                 SET planned_quantity = 0
                 WHERE delivery_date BETWEEN :start_date AND :end_date
                 AND status != 'キャンセル'
+                AND (customer_code IS NULL OR customer_code != 'HIRAKATA_K')
             """)
 
             result = session.execute(query, {

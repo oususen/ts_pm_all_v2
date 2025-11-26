@@ -67,6 +67,7 @@ class FormComponents:
             col1, col2 = st.columns(2)
             
             with col1:
+                container_code = st.text_input("容器コード", value="", placeholder="例: AMI, HB37")
                 name = st.text_input("容器名", value="小箱")
                 width = st.number_input("幅 (mm)", min_value=1, value=800)
                 depth = st.number_input("奥行 (mm)", min_value=1, value=600)
@@ -80,6 +81,8 @@ class FormComponents:
             
             if submitted:
                 return {
+                    'container_code': container_code,
+                    # 'container_code': container_code.strip() if container_code else None,
                     'name': name,
                     'width': width,
                     'depth': depth,
