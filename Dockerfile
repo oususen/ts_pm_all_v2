@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     pkg-config \
     fonts-ipafont-gothic \
+    fonts-ipaexfont \
     fonts-takao-gothic \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
