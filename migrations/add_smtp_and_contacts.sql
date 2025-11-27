@@ -14,21 +14,58 @@ USE kubota_db;
 -- 既存の列を確認（エラーを無視して続行）
 SELECT '--- Step 1: usersテーブルにSMTP設定列を追加 ---' AS status;
 
+-- MySQL 5.7対応: 条件付き列追加（既存の場合はエラーを無視）
 -- smtp_host列の追加
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS smtp_host VARCHAR(255) NULL COMMENT 'SMTPサーバーホスト';
+SET @sql = (SELECT IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = 'kubota_db'
+     AND TABLE_NAME = 'users'
+     AND COLUMN_NAME = 'smtp_host') = 0,
+    'ALTER TABLE users ADD COLUMN smtp_host VARCHAR(255) NULL COMMENT "SMTPサーバーホスト"',
+    'SELECT "smtp_host列は既に存在します" AS message'
+));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- smtp_port列の追加
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS smtp_port INT NULL DEFAULT 587 COMMENT 'SMTPポート番号';
+SET @sql = (SELECT IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = 'kubota_db'
+     AND TABLE_NAME = 'users'
+     AND COLUMN_NAME = 'smtp_port') = 0,
+    'ALTER TABLE users ADD COLUMN smtp_port INT NULL DEFAULT 587 COMMENT "SMTPポート番号"',
+    'SELECT "smtp_port列は既に存在します" AS message'
+));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- smtp_user列の追加
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS smtp_user VARCHAR(255) NULL COMMENT 'SMTP認証ユーザー名';
+SET @sql = (SELECT IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = 'kubota_db'
+     AND TABLE_NAME = 'users'
+     AND COLUMN_NAME = 'smtp_user') = 0,
+    'ALTER TABLE users ADD COLUMN smtp_user VARCHAR(255) NULL COMMENT "SMTP認証ユーザー名"',
+    'SELECT "smtp_user列は既に存在します" AS message'
+));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- smtp_password列の追加
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS smtp_password VARCHAR(255) NULL COMMENT 'SMTP認証パスワード';
+SET @sql = (SELECT IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = 'kubota_db'
+     AND TABLE_NAME = 'users'
+     AND COLUMN_NAME = 'smtp_password') = 0,
+    'ALTER TABLE users ADD COLUMN smtp_password VARCHAR(255) NULL COMMENT "SMTP認証パスワード"',
+    'SELECT "smtp_password列は既に存在します" AS message'
+));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 SELECT '✓ usersテーブルにSMTP設定列を追加しました' AS status;
 
