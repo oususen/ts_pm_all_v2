@@ -25,7 +25,7 @@ class HirakataPickupPDFService:
     PICKUP_LOCATION = "ダイソウ工業（株）三重県津市芸濃町北神山１４７０－３"
     DELIVERY_LOCATION = "ロジスクエア枚方"
     TRANSPORT_COMPANY = "大友ﾛｼﾞｽﾃｨｸｽｻｰﾋﾞｽ(株)京都営業所 配車担当者 御中"
-    EMAIL = "wang@daiso-ind.co.jp"
+    EMAIL = "kyouto03@otomo-logi.co.jp"
     DESTINATION = "枚方製造所行き"
 
     def __init__(self, db_manager):
@@ -208,12 +208,20 @@ class HirakataPickupPDFService:
                 container_name = container_info.get('container_name') or container_code
                 container_color = container_info.get('color', '')
                 quantity = int(container_info.get('total_containers', 0) or 0)
-                unit = container_info.get('unit', 'ポリ')
+                # アミ容器の場合は常に単位を「アミ」に設定（出荷なしでも）
+                if 'アミ' in container_name or container_code == 'AMI':
+                    unit = 'アミ'
+                else:
+                    unit = container_info.get('unit', 'ポリ')
             else:
                 container_name = container_code
                 container_color = ''
                 quantity = 0
-                unit = 'ポリ' if container_code != 'AMI' else 'アミ'
+                # アミ容器の場合は常に単位を「アミ」に設定
+                if 'アミ' in container_code or container_code == 'AMI':
+                    unit = 'アミ'
+                else:
+                    unit = 'ポリ'
 
             rows.append([
                 f"容    器{row_index}:",
@@ -264,7 +272,7 @@ class HirakataPickupPDFService:
             target_date: 対象日
 
         Returns:
-            Tuple[List[Dict], int]: �e��R�[�h�A�e�햼�A�K�v�e�퐔�̏W�v�A�r�[�h�^�C�����ő�
+            Tuple[List[Dict], int]: 容器コード、容器名、必要容器数の集計、リードタイム最大値
         """
         session = self.db.get_session()
 
