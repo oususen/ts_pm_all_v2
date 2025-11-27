@@ -286,6 +286,42 @@ class AuthService:
         finally:
             session.close()
 
+    def get_user_detail(self, user_id: int) -> Dict[str, Any]:
+        """ユーザー詳細情報取得（SMTP設定含む）"""
+        session = self.db.get_session()
+
+        try:
+            query = text("""
+                SELECT id, username, full_name, email, is_active, is_admin,
+                       smtp_host, smtp_port, smtp_user, smtp_password,
+                       created_at, last_login
+                FROM users
+                WHERE id = :user_id
+            """)
+
+            result = session.execute(query, {'user_id': user_id}).fetchone()
+
+            if result:
+                return {
+                    'id': result[0],
+                    'username': result[1],
+                    'full_name': result[2],
+                    'email': result[3],
+                    'is_active': result[4],
+                    'is_admin': result[5],
+                    'smtp_host': result[6],
+                    'smtp_port': result[7],
+                    'smtp_user': result[8],
+                    'smtp_password': result[9],
+                    'created_at': result[10],
+                    'last_login': result[11]
+                }
+            else:
+                return {}
+
+        finally:
+            session.close()
+
     def update_user(self, user_id: int, update_data: Dict[str, Any]) -> bool:
         """ユーザー情報更新"""
         session = self.db.get_session()
@@ -295,6 +331,11 @@ class AuthService:
             if 'password' in update_data:
                 update_data['password_hash'] = self.hash_password(update_data['password'])
                 del update_data['password']
+
+            # SMTPパスワードは平文で保存（暗号化は後で検討）
+            # 変更がない場合は削除
+            if 'smtp_password' in update_data and not update_data['smtp_password']:
+                del update_data['smtp_password']
 
             # 動的にUPDATE文を構築
             set_clause = ', '.join([f"{key} = :{key}" for key in update_data.keys()])
