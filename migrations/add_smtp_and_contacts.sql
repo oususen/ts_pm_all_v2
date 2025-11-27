@@ -78,7 +78,6 @@ SELECT
     1,
     1,
     '枚方製造所向け集荷依頼書の送信先'
-FROM DUAL
 WHERE NOT EXISTS (
     SELECT 1 FROM contacts
     WHERE contact_type = '枚方集荷依頼'
