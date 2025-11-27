@@ -71,11 +71,15 @@ class HirakataPickupPage:
                     # ファイル名生成
                     filename = f"枚方集荷依頼書_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.pdf"
 
+                    # 日別製品リストを取得
+                    daily_products = self.service.get_daily_product_list(start_date, end_date)
+
                     # セッション状態に保存
                     st.session_state['generated_pdf'] = pdf_buffer
                     st.session_state['generated_pdf_filename'] = filename
                     st.session_state['pdf_start_date'] = start_date
                     st.session_state['pdf_end_date'] = end_date
+                    st.session_state['daily_products'] = daily_products
 
                     st.success("✅ PDF生成完了")
 
@@ -104,6 +108,10 @@ class HirakataPickupPage:
         # メール送信ダイアログ
         if st.session_state.get('show_email_dialog', False):
             self._show_email_dialog()
+
+        # 日別製品リスト表示
+        if 'daily_products' in st.session_state and st.session_state['daily_products']:
+            self._show_daily_product_list()
 
         # 説明
         with st.expander("📖 使い方"):
@@ -234,3 +242,56 @@ class HirakataPickupPage:
             if st.button("キャンセル"):
                 st.session_state['show_email_dialog'] = False
                 st.rerun()
+
+    def _show_daily_product_list(self):
+        """日別製品リスト表示"""
+        st.markdown("---")
+        st.subheader("📋 日別製品リスト")
+
+        daily_products = st.session_state.get('daily_products', {})
+
+        if not daily_products:
+            st.info("対象期間に出荷予定の製品がありません")
+            return
+
+        # 日付順にソート
+        sorted_dates = sorted(daily_products.keys())
+
+        for delivery_date in sorted_dates:
+            products = daily_products[delivery_date]
+
+            # 日付ごとのエキスパンダー
+            with st.expander(f"📅 {delivery_date.strftime('%Y年%m月%d日')} ({len(products)}製品)", expanded=False):
+                # テーブルデータ作成
+                import pandas as pd
+
+                df_data = []
+                for product in products:
+                    df_data.append({
+                        '製品コード': product['product_code'],
+                        '製品名': product['product_name'],
+                        '数量': f"{product['quantity']:,}",
+                        '容器種類': product['container_name'],
+                        '必要容器数': product['containers_needed']
+                    })
+
+                df = pd.DataFrame(df_data)
+
+                # テーブル表示（インデックス非表示）
+                st.dataframe(
+                    df,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # 合計表示
+                total_quantity = sum(p['quantity'] for p in products)
+                total_containers = sum(p['containers_needed'] for p in products)
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("製品種類数", f"{len(products)}種")
+                with col2:
+                    st.metric("合計数量", f"{total_quantity:,}")
+                with col3:
+                    st.metric("合計容器数", f"{total_containers}")

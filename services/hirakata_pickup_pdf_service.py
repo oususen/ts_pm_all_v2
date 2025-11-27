@@ -381,3 +381,86 @@ class HirakataPickupPDFService:
             if not working_set or current in working_set:
                 remaining -= 1
         return current
+
+    def get_daily_product_list(self, start_date: date, end_date: date) -> Dict[date, List[Dict]]:
+        """
+        指定期間の日別製品リストを取得
+
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+
+        Returns:
+            Dict[date, List[Dict]]: 日付ごとの製品リスト
+        """
+        session = self.db.get_session()
+
+        try:
+            query = text("""
+                SELECT
+                    DATE(dp.delivery_date) AS delivery_date,
+                    p.product_code,
+                    p.product_name,
+                    p.capacity,
+                    cc.container_code,
+                    cc.name AS container_name,
+                    COALESCE(
+                        NULLIF(dp.planned_quantity, 0),
+                        NULLIF(dp.manual_planning_quantity, 0),
+                        dp.order_quantity,
+                        0
+                    ) AS effective_quantity
+                FROM delivery_progress dp
+                INNER JOIN products p ON dp.product_id = p.id
+                LEFT JOIN container_capacity cc ON p.used_container_id = cc.id
+                WHERE DATE(dp.delivery_date) BETWEEN :start_date AND :end_date
+                  AND dp.customer_code = 'HIRAKATA_K'
+                  AND COALESCE(
+                        NULLIF(dp.planned_quantity, 0),
+                        NULLIF(dp.manual_planning_quantity, 0),
+                        dp.order_quantity,
+                        0
+                  ) > 0
+                ORDER BY delivery_date, p.product_code
+            """)
+
+            rows = session.execute(query, {
+                'start_date': start_date,
+                'end_date': end_date
+            }).fetchall()
+
+            # 日付ごとにグループ化
+            daily_products: Dict[date, List[Dict]] = {}
+            for row in rows:
+                delivery_date = getattr(row, 'delivery_date')
+                product_code = getattr(row, 'product_code', '')
+                product_name = getattr(row, 'product_name', '')
+                capacity = int(getattr(row, 'capacity', 0) or 0)
+                container_code = getattr(row, 'container_code', None) or '不明'
+                container_name = getattr(row, 'container_name', None) or '不明容器'
+                quantity = int(getattr(row, 'effective_quantity', 0) or 0)
+
+                effective_capacity = capacity if capacity > 0 else 1
+                containers_needed = math.ceil(quantity / effective_capacity) if quantity > 0 else 0
+
+                if delivery_date not in daily_products:
+                    daily_products[delivery_date] = []
+
+                daily_products[delivery_date].append({
+                    'product_code': product_code,
+                    'product_name': product_name,
+                    'quantity': quantity,
+                    'container_code': container_code,
+                    'container_name': container_name,
+                    'containers_needed': containers_needed
+                })
+
+            return daily_products
+
+        except Exception as e:
+            print(f"日別製品リスト取得エラー: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}
+        finally:
+            session.close()
