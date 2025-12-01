@@ -19,7 +19,7 @@ class TieraKakuteiCSVImportService:
     HISTORY_PREFIX = "[ティエラ様・確定CSV]"
 
     # 列インデックス定義
-    COL_ORDER_NUMBER = 7     # 発注番号
+    COL_ORDER_NUMBER = 7     # 注文番号（発注番号）
     COL_DRAWING_NO = 11      # 図番
     COL_DELIVERY_DATE = 13   # 納期
     COL_QUANTITY = 15        # 数量
@@ -55,6 +55,7 @@ class TieraKakuteiCSVImportService:
             product_name_jp_col = column_names[self.COL_PRODUCT_NAME_JP]
             product_name_en_col = column_names[self.COL_PRODUCT_NAME_EN]
 
+            print(f"📌 注文番号列: {order_number_col}")
             print(f"📌 図番列: {drawing_col}")
             print(f"📌 納期列: {delivery_col}")
             print(f"📌 数量列: {quantity_col}")
@@ -176,10 +177,14 @@ class TieraKakuteiCSVImportService:
 
         # order_numbersをソート済みリストに変換
         result = []
+        order_numbers_found = 0
         for item in aggregated.values():
             item['order_numbers'] = sorted(item['order_numbers'])
+            if item['order_numbers']:
+                order_numbers_found += 1
             result.append(item)
         print(f"✅ グループ化後: {len(result)}件のユニークデータ（確定CSV）")
+        print(f"📋 注文番号あり: {order_numbers_found}件 / なし: {len(result) - order_numbers_found}件")
         return result
 
     def _import_products(self, grouped_data: List[Dict]) -> Dict:
@@ -294,7 +299,14 @@ class TieraKakuteiCSVImportService:
                     addition_quantity = sum(order_details.values()) if order_details else quantity
                 else:
                     new_order_numbers = current_order_numbers - previous_order_numbers
-                    addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers) if new_order_numbers else 0
+                    if new_order_numbers:
+                        addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers)
+                    elif not order_details:
+                        # 発注番号がない場合は、全数量を追加
+                        addition_quantity = quantity
+                    else:
+                        # 新しい発注番号がない場合は追加なし
+                        addition_quantity = 0
 
                 if not existing_row or is_naiji_stub:
                     new_total = addition_quantity if order_details else quantity
@@ -391,7 +403,15 @@ class TieraKakuteiCSVImportService:
 
                 current_order_numbers = set(order_details.keys())
                 new_order_numbers = current_order_numbers - existing_order_numbers
-                addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers) if new_order_numbers else 0
+
+                if new_order_numbers:
+                    addition_quantity = sum(order_details[order_no] for order_no in new_order_numbers)
+                elif not order_details:
+                    # 発注番号がない場合は、全数量を追加
+                    addition_quantity = quantity
+                else:
+                    # 新しい発注番号がない場合は追加なし
+                    addition_quantity = 0
 
                 if existing:
                     total_quantity = existing_qty_value + addition_quantity
