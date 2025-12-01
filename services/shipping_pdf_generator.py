@@ -1116,6 +1116,19 @@ def generate_shipping_order_pdf(
             canv.showPage()
             current_y = page_height - margin_top
 
+    # YD40003261の注意事項を追加（一番下に表示）
+    attachment_note = shipping_data.get("attachment_note")
+    if attachment_note:
+        current_y -= 5 * mm
+        if current_y < 20 * mm:
+            canv.showPage()
+            current_y = page_height - margin_top
+
+        canv.setFont("MSGothic-Bold", 11)
+        canv.setFillColor(colors.red)
+        canv.drawString(margin_x, current_y, f"【注意】 {attachment_note}")
+        canv.setFillColor(colors.black)
+
     canv.save()
 
     return output_path

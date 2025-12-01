@@ -61,6 +61,7 @@ class ShippingOrderService:
                 LEFT JOIN container_capacity cc ON p.used_container_id = cc.id
                 WHERE DATE(dp.order_date) = :target_date
                     AND dp.order_quantity > 0
+                    AND p.product_code != 'YD40003261'  -- YD40003261は別途注意事項として表示
                     AND (
                         -- 容器が4-5Tの製品
                         cc.name LIKE '%4-5T%'
@@ -75,6 +76,19 @@ class ShippingOrderService:
             result = session.execute(query, {'target_date': target_date})
             rows = result.fetchall()
 
+            # YD40003261（YD40003117に付ける製品）の受注数を取得
+            query_attachment = text("""
+                SELECT SUM(dp.order_quantity) as total_qty
+                FROM delivery_progress dp
+                INNER JOIN products p ON dp.product_id = p.id
+                WHERE DATE(dp.order_date) = :target_date
+                    AND p.product_code = 'YD40003261'
+                    AND dp.order_quantity > 0
+            """)
+            result_attachment = session.execute(query_attachment, {'target_date': target_date})
+            attachment_row = result_attachment.fetchone()
+            attachment_qty = int(attachment_row.total_qty) if attachment_row and attachment_row.total_qty else 0
+
             if not rows:
                 return {
                     'date': target_date,
@@ -82,7 +96,8 @@ class ShippingOrderService:
                     'trip2': [],
                     'trip3': [],
                     'trip4': [],
-                    'trip2_special_annotations': []
+                    'trip2_special_annotations': [],
+                    'attachment_note': f'YD40003261 {attachment_qty}個あり' if attachment_qty > 0 else None
                 }
 
             # DataFrameに変換
@@ -117,7 +132,8 @@ class ShippingOrderService:
                 'trip2': trip2_data,
                 'trip3': trip3_data,
                 'trip4': trip4_data,
-                'trip2_special_annotations': trip2_special
+                'trip2_special_annotations': trip2_special,
+                'attachment_note': f'YD40003261 {attachment_qty}個あり' if attachment_qty > 0 else None
             }
 
         finally:
