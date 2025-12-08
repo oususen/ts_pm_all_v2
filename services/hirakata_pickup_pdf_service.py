@@ -241,17 +241,20 @@ class HirakataPickupPDFService:
         ])
 
         table = Table(rows, colWidths=[80, 90, 25, 60, 25, 60])
-        table.setStyle(TableStyle([
+        styles = [
             ('FONT', (0, 0), (-1, -1), 'JapaneseFont', 10),
             ('BOX', (0, 0), (-1, -1), 1, colors.black),
             ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('BACKGROUND', (0, 0), (0, 0), colors.white),
-            ('BACKGROUND', (0, 5), (0, 5), colors.white),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (3, 1), (3, 4), 'RIGHT'),
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
             ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ]))
+        ]
+        container_start = 1
+        container_end = max(container_start, len(rows) - 2)  # コンテナ行の最終インデックス
+        if container_end >= container_start:
+            styles.append(('ALIGN', (3, container_start), (3, container_end), 'RIGHT'))
+        table.setStyle(TableStyle(styles))
 
         table.wrapOn(c, width, 800)
         table.drawOn(c, 100, y_position - 120)
