@@ -322,12 +322,18 @@ class KubotaKakuteiCSVImportService:
                 inspection_category = item['inspection_category']
                 order_details: Dict[str, int] = item.get('order_details', {})
 
-                # 内示の集約レコードを削除（同じ製品コード×指示日の内示は確定優先）
-                naiji_order_id = f"ORD-{delivery_date.strftime('%Y%m%d')}-{product_code}"
-                session.execute(text("""
+                # 内示の集約レコードを削除（同じ製品コードの内示を納期までまとめて削除）
+                deleted_rows = session.execute(text("""
                     DELETE FROM delivery_progress
-                    WHERE order_id = :order_id AND order_type = '内示'
-                """), {'order_id': naiji_order_id})
+                    WHERE product_id = :product_id
+                      AND order_type = '内示'
+                      AND delivery_date <= :delivery_date
+                """), {
+                    'product_id': product_id,
+                    'delivery_date': delivery_date
+                }).rowcount
+                if deleted_rows > 0:
+                    print(f"  内示削除: {product_code} 納期<={delivery_date} 件数={deleted_rows}")
 
                 due_date = delivery_date
                 issue_date = item.get('issue_date')

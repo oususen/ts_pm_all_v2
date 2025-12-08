@@ -369,23 +369,19 @@ class TieraKakuteiCSVImportService:
                 # オーダーIDを生成（確定CSV用）
                 order_id = f"TIERA-KAKUTEI-{delivery_date.strftime('%Y%m%d')}-{drawing_no}"
 
-                # 内示データのorder_id（重複チェック用）
-                naiji_order_id = f"TIERA-{delivery_date.strftime('%Y%m%d')}-{drawing_no}"
-
-                # ✅ 同じ製品・納期の内示データを削除（確定データを優先）
+                # ✅ 同じ製品の内示データを納期まで一括削除（確定データを優先）
                 deleted_rows = session.execute(text("""
                     DELETE FROM delivery_progress
                     WHERE product_id = :product_id
-                      AND delivery_date = :delivery_date
-                      AND order_id = :naiji_order_id
+                      AND order_type = '内示'
+                      AND delivery_date <= :delivery_date
                 """), {
                     'product_id': product_id,
-                    'delivery_date': delivery_date,
-                    'naiji_order_id': naiji_order_id
+                    'delivery_date': delivery_date
                 }).rowcount
 
                 if deleted_rows > 0:
-                    print(f"  🔄 内示データを削除: {drawing_no} 納期={delivery_date} (確定データで置換)")
+                    print(f"  🔄 内示データを削除: {drawing_no} 納期<={delivery_date} (確定データで置換)")
 
                 # 既存の確定データをチェック
                 existing = session.execute(text("""
