@@ -81,6 +81,9 @@ class TieraKakuteiCSVImportService:
             if not product_ids:
                 return False, "製品情報のインポートに失敗しました"
 
+            # インポート時刻の8日後までの内示データを削除
+            self._delete_naiji_within_8_days(product_ids)
+
             # 生産指示データを作成
             instruction_count = self._create_production_instructions(grouped_data, product_ids)
 
@@ -253,6 +256,59 @@ class TieraKakuteiCSVImportService:
             session.rollback()
             print(f"❌ 製品登録エラー: {e}")
             raise e
+        finally:
+            session.close()
+
+    def _delete_naiji_within_8_days(self, product_ids: Dict) -> int:
+        """インポート時刻の8日後まで（その日を含む）の全製品の内示データを削除"""
+        session = self.db.get_session()
+        deleted_count = 0
+
+        try:
+            from datetime import date, timedelta
+
+            # 今日の日付
+            today = date.today()
+            # 8日後の日付（この日を含めて削除）
+            delete_until_date = today + timedelta(days=8)
+
+            print(f"🗑️ 内示データ削除処理: {today}から{delete_until_date}まで（{delete_until_date}を含む）")
+
+            # 全製品の内示データを削除
+            for drawing_no, product_id in product_ids.items():
+                # インポート日から8日後まで（その日を含む）の内示データを削除
+                # order_type='内示' かつ order_idが'TIERA-'で始まるもの（確定は'TIERA-KAKUTEI-'）
+                result = session.execute(text("""
+                    DELETE FROM delivery_progress
+                    WHERE product_id = :product_id
+                      AND delivery_date <= :delete_until_date
+                      AND order_type = '内示'
+                      AND order_id LIKE 'TIERA-%'
+                      AND order_id NOT LIKE 'TIERA-KAKUTEI-%'
+                """), {
+                    'product_id': product_id,
+                    'delete_until_date': delete_until_date
+                })
+
+                if result.rowcount > 0:
+                    print(f"  🗑️ {drawing_no}: {delete_until_date}までの内示データを{result.rowcount}件削除")
+                    deleted_count += result.rowcount
+
+            session.commit()
+
+            if deleted_count > 0:
+                print(f"✅ 内示データ削除完了: {deleted_count}件（{delete_until_date}まで削除）")
+            else:
+                print(f"✅ 削除対象の内示データなし")
+
+            return deleted_count
+
+        except Exception as e:
+            session.rollback()
+            print(f"❌ 内示データ削除エラー: {e}")
+            import traceback
+            traceback.print_exc()
+            return 0
         finally:
             session.close()
 

@@ -77,6 +77,9 @@ class TieraCSVImportService:
             if not product_ids:
                 return False, "製品情報のインポートに失敗しました"
 
+            # 古い内示データを削除
+            self._delete_old_naiji_data(grouped_data, product_ids)
+
             # 生産指示データを作成
             instruction_count = self._create_production_instructions(grouped_data, product_ids)
 
@@ -228,6 +231,67 @@ class TieraCSVImportService:
             session.rollback()
             print(f"❌ 製品登録エラー: {e}")
             raise e
+        finally:
+            session.close()
+
+    def _delete_old_naiji_data(self, grouped_data: List[Dict],
+                                product_ids: Dict) -> int:
+        """インポートするCSVに含まれる製品の最も古い納期より前の内示データを削除"""
+        session = self.db.get_session()
+        deleted_count = 0
+
+        try:
+            # 製品ごとの最も古い納期を計算
+            product_min_dates = {}
+            for item in grouped_data:
+                drawing_no = item['drawing_no']
+                delivery_date = item['delivery_date']
+
+                if drawing_no not in product_min_dates:
+                    product_min_dates[drawing_no] = delivery_date
+                else:
+                    if delivery_date < product_min_dates[drawing_no]:
+                        product_min_dates[drawing_no] = delivery_date
+
+            print(f"🗑️ 内示データ削除処理: {len(product_min_dates)}製品をチェック")
+
+            # 製品ごとに古い内示データを削除
+            for drawing_no, min_date in product_min_dates.items():
+                product_id = product_ids.get(drawing_no)
+                if not product_id:
+                    continue
+
+                # 最も古い納期より前の内示データを削除
+                # order_type='内示' かつ order_idが'TIERA-'で始まるもの（確定は'TIERA-KAKUTEI-'）
+                result = session.execute(text("""
+                    DELETE FROM delivery_progress
+                    WHERE product_id = :product_id
+                      AND delivery_date < :min_date
+                      AND order_type = '内示'
+                      AND order_id LIKE 'TIERA-%'
+                      AND order_id NOT LIKE 'TIERA-KAKUTEI-%'
+                """), {
+                    'product_id': product_id,
+                    'min_date': min_date
+                })
+
+                if result.rowcount > 0:
+                    print(f"  🗑️ {drawing_no}: {min_date}より前の内示データを{result.rowcount}件削除")
+                    deleted_count += result.rowcount
+
+            session.commit()
+
+            if deleted_count > 0:
+                print(f"✅ 古い内示データ削除完了: {deleted_count}件")
+            else:
+                print(f"✅ 削除対象の古い内示データなし")
+
+            return deleted_count
+
+        except Exception as e:
+            session.rollback()
+            print(f"❌ 内示データ削除エラー: {e}")
+            return 0
         finally:
             session.close()
 
