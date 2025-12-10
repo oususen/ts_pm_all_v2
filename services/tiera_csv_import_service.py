@@ -17,6 +17,7 @@ class TieraCSVImportService:
     """
 
     HISTORY_PREFIX = "[ティエラ様・内示CSV]"
+    DEFAULT_LEAD_TIME_DAYS = 0
 
     # 列インデックス定義
     COL_DRAWING_NO = 6      # 図番
@@ -202,17 +203,18 @@ class TieraCSVImportService:
                     result = session.execute(text("""
                         INSERT INTO products (
                             product_code, product_name, delivery_location,
-                            box_type, capacity
+                            box_type, capacity, lead_time_days
                         ) VALUES (
                             :product_code, :product_name, :delivery_location,
-                            :box_type, :capacity
+                            :box_type, :capacity, :lead_time_days
                         )
                     """), {
                         'product_code': drawing_no,
                         'product_name': product_name,
                         'delivery_location': 'ティエラ様',
                         'box_type': '',
-                        'capacity': 1
+                        'capacity': 1,
+                        'lead_time_days': self.DEFAULT_LEAD_TIME_DAYS
                     })
                     product_id = result.lastrowid
                     print(f"  + 新規製品: {drawing_no} [{product_name}] (ID: {product_id})")

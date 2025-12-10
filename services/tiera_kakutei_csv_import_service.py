@@ -1,6 +1,6 @@
 # app/services/tiera_kakutei_csv_import_service.py
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Tuple, List, Dict
 from sqlalchemy import text
 
@@ -17,6 +17,7 @@ class TieraKakuteiCSVImportService:
     """
 
     HISTORY_PREFIX = "[ティエラ様・確定CSV]"
+    DEFAULT_LEAD_TIME_DAYS = 0
 
     # 列インデックス定義
     COL_ORDER_NUMBER = 7     # 注文番号（発注番号）
@@ -227,17 +228,18 @@ class TieraKakuteiCSVImportService:
                     result = session.execute(text("""
                         INSERT INTO products (
                             product_code, product_name, delivery_location,
-                            box_type, capacity
+                            box_type, capacity, lead_time_days
                         ) VALUES (
                             :product_code, :product_name, :delivery_location,
-                            :box_type, :capacity
+                            :box_type, :capacity, :lead_time_days
                         )
                     """), {
                         'product_code': drawing_no,
                         'product_name': product_name,
                         'delivery_location': 'ティエラ様（確定）',
                         'box_type': '',
-                        'capacity': 1
+                        'capacity': 1,
+                        'lead_time_days': self.DEFAULT_LEAD_TIME_DAYS
                     })
                     product_id = result.lastrowid
                     print(f"  + 新規製品: {drawing_no} [{product_name}] (ID: {product_id})")
@@ -349,6 +351,36 @@ class TieraKakuteiCSVImportService:
         finally:
             session.close()
 
+    def _get_lead_time_days(self, session, product_id: int) -> int:
+        """製品リードタイム（日）を取得。未設定なら1日を既定値とする。"""
+        row = session.execute(text("""
+            SELECT p.lead_time_days, pg.default_lead_time_days
+            FROM products p
+            LEFT JOIN product_groups pg ON p.product_group_id = pg.id
+            WHERE p.id = :product_id
+        """), {'product_id': product_id}).fetchone()
+
+        lead_time = row[0] if row and row[0] is not None else None
+        group_default = row[1] if row and len(row) > 1 and row[1] is not None else None
+
+        if lead_time is not None and lead_time > 0:
+            return int(lead_time)
+        if group_default is not None and group_default > 0:
+            return int(group_default)
+        return self.DEFAULT_LEAD_TIME_DAYS
+
+    def _calculate_shipping_date(self, session, product_id: int, delivery_date):
+        """リードタイムを考慮して出荷日(order_date)を計算。"""
+        try:
+            lead_time_days = int(self._get_lead_time_days(session, product_id))
+        except Exception:
+            lead_time_days = self.DEFAULT_LEAD_TIME_DAYS
+
+        if lead_time_days <= 0:
+            lead_time_days = self.DEFAULT_LEAD_TIME_DAYS
+
+        return delivery_date - timedelta(days=lead_time_days)
+
     def _create_delivery_progress(self, grouped_data: List[Dict],
                                   product_ids: Dict) -> int:
         """納入進度データを作成"""
@@ -365,6 +397,8 @@ class TieraKakuteiCSVImportService:
                 product_id = product_ids.get(drawing_no)
                 if not product_id:
                     continue
+
+                shipping_date = self._calculate_shipping_date(session, product_id, delivery_date)
 
                 # オーダーIDを生成（確定CSV用）
                 order_id = f"TIERA-KAKUTEI-{delivery_date.strftime('%Y%m%d')}-{drawing_no}"
@@ -428,6 +462,7 @@ class TieraKakuteiCSVImportService:
                         SET order_quantity = :new_quantity,
                             order_type = :order_type,
                             order_number = :order_number,
+                            order_date = :order_date,
                             notes = :notes
                         WHERE id = :progress_id
                     """), {
@@ -435,6 +470,7 @@ class TieraKakuteiCSVImportService:
                         'new_quantity': total_quantity,
                         'order_type': '確定',
                         'order_number': order_numbers_str,
+                        'order_date': shipping_date,
                         'notes': notes_base + ' (更新)'
                     })
                 else:
@@ -451,7 +487,7 @@ class TieraKakuteiCSVImportService:
                     """), {
                         'order_id': order_id,
                         'product_id': product_id,
-                        'order_date': delivery_date,
+                        'order_date': shipping_date,
                         'delivery_date': delivery_date,
                         'order_quantity': total_quantity,
                         'customer_code': 'TIERA_K',
