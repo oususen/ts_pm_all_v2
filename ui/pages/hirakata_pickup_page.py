@@ -62,8 +62,13 @@ class HirakataPickupPage:
             st.error("開始日は終了日より前である必要があります")
             return
 
-        # PDF生成ボタン
-        if st.button("📄 集荷依頼書PDF生成", type="primary", disabled=not can_edit):
+        # PDF/Excel 生成ボタン
+        col_pdf_btn, col_excel_btn = st.columns(2)
+
+        pdf_clicked = col_pdf_btn.button("📄 集荷依頼書PDF生成", type="primary", disabled=not can_edit)
+        excel_clicked = col_excel_btn.button("📦 集荷製品詳細（Excel）", type="secondary", disabled=not can_edit)
+
+        if pdf_clicked:
             with st.spinner("PDFを生成中..."):
                 try:
                     pdf_buffer = self.service.generate_pickup_request_pdf(start_date, end_date)
@@ -88,22 +93,62 @@ class HirakataPickupPage:
                     import traceback
                     st.code(traceback.format_exc())
 
-        # PDFが生成されている場合、ダウンロードと送信ボタンを表示
-        if 'generated_pdf' in st.session_state:
-            col_dl, col_send = st.columns(2)
+        if excel_clicked:
+            with st.spinner("Excelを生成中..."):
+                try:
+                    daily_products = self.service.get_daily_product_list(start_date, end_date)
+                    st.session_state['daily_products'] = daily_products
 
-            with col_dl:
-                st.download_button(
-                    label="📥 PDFダウンロード",
-                    data=st.session_state['generated_pdf'],
-                    file_name=st.session_state['generated_pdf_filename'],
-                    mime="application/pdf",
-                    key="download_hirakata_pickup_pdf"
-                )
+                    if not daily_products:
+                        st.session_state.pop('generated_excel', None)
+                        st.session_state.pop('generated_excel_filename', None)
+                        st.warning("対象期間に出荷予定の製品がありません")
+                    else:
+                        excel_buffer = self.service.generate_product_details_excel(
+                            start_date,
+                            end_date,
+                            daily_products
+                        )
+                        excel_filename = f"枚方集荷製品詳細_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx"
 
-            with col_send:
-                if st.button("📧 集荷依頼書を送信", type="secondary", disabled=not can_edit):
-                    st.session_state['show_email_dialog'] = True
+                        st.session_state['generated_excel'] = excel_buffer
+                        st.session_state['generated_excel_filename'] = excel_filename
+
+                        st.success("✅ Excel生成完了")
+
+                except Exception as e:
+                    st.error(f"Excel生成エラー: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
+
+        # PDF/Excel が生成されている場合、ダウンロードと送信ボタンを表示
+        if st.session_state.get('generated_pdf') or st.session_state.get('generated_excel'):
+            col_dl_pdf, col_dl_excel, col_send = st.columns(3)
+
+            if 'generated_pdf' in st.session_state:
+                with col_dl_pdf:
+                    st.download_button(
+                        label="📥 PDFダウンロード",
+                        data=st.session_state['generated_pdf'],
+                        file_name=st.session_state['generated_pdf_filename'],
+                        mime="application/pdf",
+                        key="download_hirakata_pickup_pdf"
+                    )
+
+            if 'generated_excel' in st.session_state:
+                with col_dl_excel:
+                    st.download_button(
+                        label="📥 集荷製品詳細Excel",
+                        data=st.session_state['generated_excel'],
+                        file_name=st.session_state['generated_excel_filename'],
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_hirakata_pickup_excel"
+                    )
+
+            if 'generated_pdf' in st.session_state:
+                with col_send:
+                    if st.button("📧 集荷依頼書を送信", type="secondary", disabled=not can_edit):
+                        st.session_state['show_email_dialog'] = True
 
         # メール送信ダイアログ
         if st.session_state.get('show_email_dialog', False):

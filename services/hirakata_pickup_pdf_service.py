@@ -9,11 +9,12 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Table, TableStyle
 from datetime import date, timedelta
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from sqlalchemy import text
 from io import BytesIO
 import os
 import math
+import pandas as pd
 
 
 class HirakataPickupPDFService:
@@ -384,6 +385,80 @@ class HirakataPickupPDFService:
             if not working_set or current in working_set:
                 remaining -= 1
         return current
+
+    def generate_product_details_excel(
+        self,
+        start_date: date,
+        end_date: date,
+        daily_products: Optional[Dict[date, List[Dict]]] = None
+    ) -> BytesIO:
+        """
+        対象期間の製品明細をExcelで生成
+
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+            daily_products: 事前取得済みの日別製品リスト（省略可）
+
+        Returns:
+            BytesIO: Excel データ
+        """
+        products_by_date = daily_products if daily_products is not None else self.get_daily_product_list(start_date, end_date)
+
+        rows = []
+        for delivery_date in sorted(products_by_date.keys()):
+            for product in products_by_date[delivery_date]:
+                rows.append({
+                    '納品日': delivery_date,
+                    '製品コード': product.get('product_code', ''),
+                    '製品名': product.get('product_name', ''),
+                    '数量': int(product.get('quantity', 0) or 0),
+                    '必要容器数': int(product.get('containers_needed', 0) or 0),
+                    '容器コード': product.get('container_code', ''),
+                    '容器名': product.get('container_name', '')
+                })
+
+        # 明細シート（該当なしの場合もヘッダ付きで出力）
+        detail_df = pd.DataFrame(rows, columns=[
+            '納品日', '製品コード', '製品名', '数量', '必要容器数', '容器コード', '容器名'
+        ])
+        if detail_df.empty:
+            detail_df = pd.DataFrame([{
+                '納品日': '',
+                '製品コード': '対象データなし',
+                '製品名': '',
+                '数量': 0,
+                '必要容器数': 0,
+                '容器コード': '',
+                '容器名': ''
+            }])
+
+        # サマリシート
+        summary_rows = []
+        for delivery_date in sorted(products_by_date.keys()):
+            products = products_by_date[delivery_date]
+            summary_rows.append({
+                '納品日': delivery_date,
+                '製品種類数': len(products),
+                '合計数量': sum(int(p.get('quantity', 0) or 0) for p in products),
+                '合計容器数': sum(int(p.get('containers_needed', 0) or 0) for p in products)
+            })
+        if not summary_rows:
+            summary_rows = [{
+                '納品日': '',
+                '製品種類数': 0,
+                '合計数量': 0,
+                '合計容器数': 0
+            }]
+        summary_df = pd.DataFrame(summary_rows, columns=['納品日', '製品種類数', '合計数量', '合計容器数'])
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            detail_df.to_excel(writer, sheet_name='集荷製品明細', index=False)
+            summary_df.to_excel(writer, sheet_name='日別サマリ', index=False)
+
+        output.seek(0)
+        return output
 
     def get_daily_product_list(self, start_date: date, end_date: date) -> Dict[date, List[Dict]]:
         """
