@@ -9,6 +9,7 @@ from services.tiera_kakutei_csv_import_service import TieraKakuteiCSVImportServi
 from services.tiera_riden_csv_import_service import TieraRidenCSVImportService
 from services.kubota_kakutei_csv_import_service import KubotaKakuteiCSVImportService
 from services.hirakata_kakutei_csv_import_service import HirakataKakuteiCSVImportService
+from services.hirakata_special_csv_import_service import HirakataSpecialCSVImportService
 from services.transport_service import TransportService
 
 class CSVImportPage:
@@ -81,10 +82,11 @@ class CSVImportPage:
             csv_format = "V2/V3形式 (Shift-JIS)"
             st.caption(f"フォーマット: {csv_format}")
 
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
                 "📤 内示CSVアップロード",
                 "📦 確定受注CSVアップロード",
                 "🏢 枚方受注CSVアップロード",
+                "🏢 枚方特殊CSVアップロード",
                 "📊 インポート履歴",
                 "ℹ️ 使い方"
             ])
@@ -107,10 +109,16 @@ class CSVImportPage:
                 self._show_upload_form(tab_prefix="hirakata_kakutei_")
 
             with tab4:
+                self.import_service = HirakataSpecialCSVImportService(self.db_manager)
+                st.subheader("🏢 枚方特殊CSV（RCV_NVAN-2特殊形式）")
+                st.caption("フォーマット: CP932 / NO=47の行のみ / 列1:№, 列4:発注番号, 列6:製品コード, 列11:品名, 列24:納期, 列25:数量")
+                self._show_upload_form(tab_prefix="hirakata_special_")
+
+            with tab5:
                 self.import_service = CSVImportService(self.db_manager)
                 self._show_import_history()
 
-            with tab5:
+            with tab6:
                 self._show_instructions()
     
     def _show_upload_form(self, tab_prefix=""):
@@ -126,7 +134,24 @@ class CSVImportPage:
         customer = st.session_state.get('current_customer', 'kubota')
 
         if customer == 'kubota':
-            if isinstance(self.import_service, HirakataKakuteiCSVImportService):
+            if isinstance(self.import_service, HirakataSpecialCSVImportService):
+                st.info("""
+                **🏢 対応フォーマット（枚方特殊確定受注CSV／RCV_NVAN-2特殊形式）:**
+                - エンコーディング: CP932
+                - NOが47の行のみを処理対象とします
+                - 列1: №（47のみ）
+                - 列4: 発注番号
+                - 列6: 製品コード
+                - 列11: 品名
+                - 列24: 納期（MMDD形式）
+                - 列25: 数量
+
+                **インポート仕様:**
+                - 同一品番・納期の数量は合算して登録
+                - 既存の配送進捗も最新数量へ置き換えます
+                - 検査区分は自動的に'N'として登録されます
+                """)
+            elif isinstance(self.import_service, HirakataKakuteiCSVImportService):
                 st.info("""
                 **🏢 対応フォーマット（枚方確定受注CSV／RCV_NVAN形式）:**
                 - エンコーディング: CP932
@@ -219,7 +244,7 @@ class CSVImportPage:
             try:
                 # 顧客に応じたエンコーディングで読み込み
                 customer = st.session_state.get('current_customer', 'kubota')
-                if isinstance(self.import_service, (KubotaKakuteiCSVImportService, HirakataKakuteiCSVImportService)):
+                if isinstance(self.import_service, (KubotaKakuteiCSVImportService, HirakataKakuteiCSVImportService, HirakataSpecialCSVImportService)):
                     encoding = 'cp932'
                 elif customer == 'kubota':
                     encoding = 'shift_jis'
@@ -227,7 +252,7 @@ class CSVImportPage:
                     encoding = 'cp932'
 
                 # 枚方CSVの場合はヘッダーなし
-                if isinstance(self.import_service, HirakataKakuteiCSVImportService):
+                if isinstance(self.import_service, (HirakataKakuteiCSVImportService, HirakataSpecialCSVImportService)):
                     df_preview = pd.read_csv(uploaded_file, encoding=encoding, nrows=10, header=None)
                 else:
                     df_preview = pd.read_csv(uploaded_file, encoding=encoding, nrows=10)
@@ -282,7 +307,16 @@ class CSVImportPage:
                 # 顧客別のインポート詳細説明
                 customer = st.session_state.get('current_customer', 'kubota')
                 if customer == 'kubota':
-                    if isinstance(self.import_service, HirakataKakuteiCSVImportService):
+                    if isinstance(self.import_service, HirakataSpecialCSVImportService):
+                        st.info("""
+                        **🏢 インポート概要（枚方特殊CSV）:**
+                        - 生産指示: 品番×納期で上書き（数量は合算）
+                        - 納入計画: 同じ受注は最新数量へ更新します
+                        - 履歴: CSVインポート履歴にも記録されます
+                        - NOが47の行のみを処理します
+                        - 検査区分は自動的に'N'として登録されます
+                        """)
+                    elif isinstance(self.import_service, HirakataKakuteiCSVImportService):
                         st.info("""
                         **🏢 インポート概要（枚方確定CSV）:**
                         - 生産指示: 品番×納期×検区で上書き（数量は合算）
@@ -727,6 +761,10 @@ class CSVImportPage:
                 return True
             return normalized.startswith("[ティエラ様]") and ("確定" not in normalized and "リーデン" not in normalized)
         
+        if isinstance(service, HirakataSpecialCSVImportService):
+            prefix = getattr(service, "HISTORY_PREFIX", "[枚方様・特殊CSV]")
+            return normalized.startswith(prefix)
+
         if isinstance(service, HirakataKakuteiCSVImportService):
             prefix = getattr(service, "HISTORY_PREFIX", "[枚方様・確定CSV]")
             return normalized.startswith(prefix)
