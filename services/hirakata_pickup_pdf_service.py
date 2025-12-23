@@ -96,7 +96,7 @@ class HirakataPickupPDFService:
         self._draw_fixed_info(c, width, height)
 
         # 納品日ごとのデータを取得して描画
-        y_position = height - 300
+        y_position = height - 250
 
         # 稼働日リスト（納品日）を取得
         working_dates, working_set = self._get_working_dates(start_date, end_date)
