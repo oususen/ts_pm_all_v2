@@ -74,7 +74,12 @@ class HirakataPickupPage:
                     pdf_buffer = self.service.generate_pickup_request_pdf(start_date, end_date)
 
                     # ファイル名生成
-                    filename = f"枚方集荷依頼書_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.pdf"
+                    pickup_range = self.service.get_pickup_date_range(start_date, end_date)
+                    if pickup_range:
+                        pickup_start_date, pickup_end_date = pickup_range
+                    else:
+                        pickup_start_date, pickup_end_date = start_date, end_date
+                    filename = f"枚方集荷依頼書_{pickup_start_date.strftime('%Y%m%d')}_{pickup_end_date.strftime('%Y%m%d')}.pdf"
 
                     # 日別製品リストを取得
                     daily_products = self.service.get_daily_product_list(start_date, end_date)
@@ -306,6 +311,23 @@ Email:gyomu4@daiso-ind.co.jp
                         )
 
                         if result['success']:
+                            # 共有フォルダにPDF保存（送信成功時）
+                            try:
+                                from pathlib import Path
+
+                                output_dir = Path(r"\\10.50.1.50\FileServerData\D-業務\業務\B-各担当別\横井\06_Kubota\05_集荷予定表\集荷依頼書_(枚方)")
+                                output_dir.mkdir(parents=True, exist_ok=True)
+                                output_path = output_dir / st.session_state['generated_pdf_filename']
+
+                                st.session_state['generated_pdf'].seek(0)
+                                with output_path.open("wb") as f:
+                                    f.write(st.session_state['generated_pdf'].read())
+                                st.session_state['generated_pdf'].seek(0)
+
+                                st.info(f"共有フォルダに保存しました: {output_path}")
+                            except Exception as e:
+                                st.warning(f"共有フォルダへの保存に失敗しました: {e}")
+
                             st.success(result['message'])
                             st.session_state['show_email_dialog'] = False
                             st.balloons()
