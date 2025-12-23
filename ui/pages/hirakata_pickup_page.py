@@ -212,15 +212,39 @@ class HirakataPickupPage:
         if selected_emails:
             st.info(f"送信先: {', '.join(selected_emails)}")
 
-        # CCアドレス
+        # CCアドレス（連絡先から選択）
+        cc_contact_types = ["枚方集荷依頼", "一般連絡先", "緊急連絡先"]
+        cc_contacts = []
+        for contact_type in cc_contact_types:
+            for contact in self.email_service.get_contacts_by_type(contact_type):
+                cc_contacts.append((contact_type, contact))
+
+        cc_contact_options = {}
+        for contact_type, contact in cc_contacts:
+            label = f"[{contact_type}] {contact['display_name']} <{contact['email']}>"
+            cc_contact_options[label] = contact['email']
+
+        if not cc_contact_options:
+            st.info("CC候補の連絡先がありません。連絡先管理で登録するか、下の手入力を使ってください。")
+
+        selected_cc_labels = st.multiselect(
+            "CCを選択",
+            options=list(cc_contact_options.keys())
+        )
+        selected_cc_emails = [cc_contact_options[label] for label in selected_cc_labels]
+
+        # CCアドレス（手入力）
         cc_emails_input = st.text_input(
             "CC（複数の場合はカンマ区切り）",
             placeholder="example1@example.com, example2@example.com"
         )
 
-        cc_emails = []
+        manual_cc_emails = []
         if cc_emails_input.strip():
-            cc_emails = [email.strip() for email in cc_emails_input.split(',') if email.strip()]
+            manual_cc_emails = [email.strip() for email in cc_emails_input.split(',') if email.strip()]
+
+        # CCアドレスを統合（重複排除）
+        cc_emails = list(dict.fromkeys(selected_cc_emails + manual_cc_emails))
 
         # メール件名
         start_date = st.session_state.get('pdf_start_date', date.today())
