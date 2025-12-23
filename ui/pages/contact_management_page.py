@@ -17,12 +17,6 @@ class ContactManagementPage:
         st.title("連絡先管理")
         st.write("メール送信先の連絡先を管理します")
 
-        # 管理者のみアクセス可能
-        current_user = st.session_state.get('user')
-        if not current_user or not current_user.get('is_admin'):
-            st.error("この画面は管理者のみアクセス可能です")
-            return
-
         # 連絡先種別の定義
         contact_types = ["枚方集荷依頼", "一般連絡先", "緊急連絡先"]
 
