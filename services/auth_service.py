@@ -114,7 +114,8 @@ class AuthService:
                     {'page_name': '📦 枚方集荷依頼書', 'can_view': True, 'can_edit': True},
                     {'page_name': '📅 会社カレンダー', 'can_view': True, 'can_edit': True},
                     {'page_name': '🔐 パスワード変更', 'can_view': True, 'can_edit': True},
-                    {'page_name': 'ユーザー管理', 'can_view': True, 'can_edit': True}
+                    {'page_name': 'ユーザー管理', 'can_view': True, 'can_edit': True},
+                    {'page_name': '連絡先管理', 'can_view': True, 'can_edit': True}
                 ]
 
             query = text("""

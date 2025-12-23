@@ -242,6 +242,9 @@ class HirakataPickupPage:
 ---
 ダイソウ工業株式会社
 辻岡(ツジオカ)
+
+ご不明な点がございましたら下記までご連絡ください。
+Email:gyomu4@daiso-ind.co.jp
 """
 
         body = st.text_area("本文", value=default_body, height=250)
@@ -258,7 +261,8 @@ class HirakataPickupPage:
                 with st.spinner("メール送信中..."):
                     try:
                         # 現在のユーザーIDを取得（認証がある場合）
-                        user_id = st.session_state.get('user_id', None)
+                        current_user = st.session_state.get('user', {})
+                        user_id = current_user.get('id')
 
                         result = self.email_service.send_email_with_attachment(
                             to_emails=selected_emails,

@@ -16,6 +16,7 @@ from ui.pages.tiera_transport_page import TieraTransportPage  # ✅ Tiera様専�
 from ui.pages.delivery_progress_page import DeliveryProgressPage
 from ui.pages.login_page import LoginPage
 from ui.pages.user_management_page import UserManagementPage
+from ui.pages.contact_management_page import ContactManagementPage
 from ui.pages.change_password_page import ChangePasswordPage
 from config_all import APP_CONFIG
 from ui.pages.calendar_page import CalendarPage
@@ -115,6 +116,7 @@ class ProductionPlanningApp:
             "📅 会社カレンダー": CalendarPage(self.db, self.auth_service),
             "🔐 パスワード変更": ChangePasswordPage(self.auth_service),
             "ユーザー管理": UserManagementPage(self.auth_service),
+            "連絡先管理": ContactManagementPage(self.auth_service),
         }
 
     def __del__(self):
