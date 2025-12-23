@@ -28,6 +28,8 @@ class HirakataPickupPDFService:
     TRANSPORT_COMPANY = "大友ﾛｼﾞｽﾃｨｸｽｻｰﾋﾞｽ(株)京都営業所 配車担当者 御中"
     EMAIL = "kyouto03@otomo-logi.co.jp"
     DESTINATION = "枚方製造所行き"
+    TARGET_GROUP_NAME_KEYWORD = "枚方"
+    TARGET_GROUP_CODE_KEYWORD = "HIRAKATA"
 
     def __init__(self, db_manager):
         self.db = db_manager
@@ -295,9 +297,13 @@ class HirakataPickupPDFService:
                     ) AS effective_quantity
                 FROM delivery_progress dp
                 INNER JOIN products p ON dp.product_id = p.id
+                LEFT JOIN product_groups pg ON p.product_group_id = pg.id
                 LEFT JOIN container_capacity cc ON p.used_container_id = cc.id
                 WHERE DATE(dp.delivery_date) = :target_date
-                  AND dp.customer_code = 'HIRAKATA_K'
+                  AND (
+                        pg.group_name LIKE :target_group_name
+                        OR UPPER(pg.group_code) LIKE :target_group_code
+                  )
                   AND COALESCE(
                         NULLIF(dp.planned_quantity, 0),
                         NULLIF(dp.manual_planning_quantity, 0),
@@ -306,7 +312,11 @@ class HirakataPickupPDFService:
                   ) > 0
             """)
 
-            rows = session.execute(query, {'target_date': target_date}).fetchall()
+            rows = session.execute(query, {
+                'target_date': target_date,
+                'target_group_name': f"%{self.TARGET_GROUP_NAME_KEYWORD}%",
+                'target_group_code': f"%{self.TARGET_GROUP_CODE_KEYWORD}%"
+            }).fetchall()
 
             container_totals: Dict[str, Dict] = {}
             max_lead_time = 1
@@ -490,9 +500,13 @@ class HirakataPickupPDFService:
                     ) AS effective_quantity
                 FROM delivery_progress dp
                 INNER JOIN products p ON dp.product_id = p.id
+                LEFT JOIN product_groups pg ON p.product_group_id = pg.id
                 LEFT JOIN container_capacity cc ON p.used_container_id = cc.id
                 WHERE DATE(dp.delivery_date) BETWEEN :start_date AND :end_date
-                  AND dp.customer_code = 'HIRAKATA_K'
+                  AND (
+                        pg.group_name LIKE :target_group_name
+                        OR UPPER(pg.group_code) LIKE :target_group_code
+                  )
                   AND COALESCE(
                         NULLIF(dp.planned_quantity, 0),
                         NULLIF(dp.manual_planning_quantity, 0),
@@ -504,7 +518,9 @@ class HirakataPickupPDFService:
 
             rows = session.execute(query, {
                 'start_date': start_date,
-                'end_date': end_date
+                'end_date': end_date,
+                'target_group_name': f"%{self.TARGET_GROUP_NAME_KEYWORD}%",
+                'target_group_code': f"%{self.TARGET_GROUP_CODE_KEYWORD}%"
             }).fetchall()
 
             # 日付ごとにグループ化
