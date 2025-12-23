@@ -396,6 +396,22 @@ class HirakataPickupPDFService:
                 remaining -= 1
         return current
 
+    def get_pickup_date_range(self, start_date: date, end_date: date) -> Optional[Tuple[date, date]]:
+        """対象期間の集荷日レンジを算出"""
+        working_dates, working_set = self._get_working_dates(start_date, end_date)
+        pickup_dates: List[date] = []
+
+        for delivery_date in working_dates:
+            container_data, max_lead_time = self._get_container_data_for_date(delivery_date)
+            if not container_data:
+                continue
+            lead_days = max(int(max_lead_time or 1), 1)
+            pickup_dates.append(self._subtract_working_days(delivery_date, lead_days, working_set))
+
+        if not pickup_dates:
+            return None
+        return min(pickup_dates), max(pickup_dates)
+
     def generate_product_details_excel(
         self,
         start_date: date,

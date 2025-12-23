@@ -249,15 +249,22 @@ class HirakataPickupPage:
         # メール件名
         start_date = st.session_state.get('pdf_start_date', date.today())
         end_date = st.session_state.get('pdf_end_date', date.today())
-        default_subject = f"【枚方集荷依頼】{start_date.strftime('%Y/%m/%d')}～{end_date.strftime('%Y/%m/%d')}"
+        pickup_range = self.service.get_pickup_date_range(start_date, end_date)
+        if pickup_range:
+            pickup_start_date, pickup_end_date = pickup_range
+        else:
+            pickup_start_date, pickup_end_date = start_date, end_date
+
+        default_subject = f"【枚方集荷依頼】{pickup_start_date.strftime('%Y/%m/%d')}～{pickup_end_date.strftime('%Y/%m/%d')}"
 
         subject = st.text_input("件名", value=default_subject)
 
         # メール本文
+
         default_body = f"""お世話になっております。
 ダイソウ工業株式会社の辻岡です。
 
-{start_date.strftime('%Y年%m月%d日')}～{end_date.strftime('%Y年%m月%d日')}の期間における枚方製造所向けの集荷依頼書を送付いたします。
+{pickup_start_date.strftime('%Y年%m月%d日')}～{pickup_end_date.strftime('%Y年%m月%d日')}の期間における枚方製造所向けの集荷依頼書を送付いたします。
 
 添付のPDFをご確認の上、集荷手配をお願いいたします。
 
