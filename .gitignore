@@ -82,3 +82,4 @@ output/
 # Dockerfile
 # docker-compose.yml
 # .dockerignore
+transfer_log_host.txt

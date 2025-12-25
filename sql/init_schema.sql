@@ -26,6 +26,7 @@ CREATE TABLE `company_calendar` (
 CREATE TABLE `container_capacity` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(50) NOT NULL,
+  `container_code` varchar(20) DEFAULT NULL COMMENT '容器コード',
   `width` int NOT NULL COMMENT '容器の幅（mm）',
   `depth` int NOT NULL COMMENT '容器の奥行（mm）',
   `height` int NOT NULL COMMENT '容器の高さ（mm）',

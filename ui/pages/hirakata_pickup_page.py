@@ -91,6 +91,22 @@ class HirakataPickupPage:
                     st.session_state['pdf_end_date'] = end_date
                     st.session_state['daily_products'] = daily_products
 
+                    # 転送用ディレクトリに即座に保存（メール送信の成否に関わらず）
+                    try:
+                        from pathlib import Path
+                        transfer_dir = Path("output/transfer_queue")
+                        transfer_dir.mkdir(parents=True, exist_ok=True)
+
+                        transfer_path = transfer_dir / filename
+                        pdf_buffer.seek(0)
+                        with open(transfer_path, "wb") as f:
+                            f.write(pdf_buffer.read())
+                        pdf_buffer.seek(0)
+
+                        st.info(f"📁 転送キューに保存しました: {transfer_path}")
+                    except Exception as e:
+                        st.warning(f"転送用保存エラー: {e}")
+
                     st.success("✅ PDF生成完了")
 
                 except Exception as e:
@@ -311,23 +327,6 @@ Email:gyomu4@daiso-ind.co.jp
                         )
 
                         if result['success']:
-                            # 共有フォルダにPDF保存（送信成功時）
-                            try:
-                                from pathlib import Path
-
-                                output_dir = Path(r"\\10.50.1.50\FileServerData\D-業務\業務\B-各担当別\横井\06_Kubota\05_集荷予定表\集荷依頼書_(枚方)")
-                                output_dir.mkdir(parents=True, exist_ok=True)
-                                output_path = output_dir / st.session_state['generated_pdf_filename']
-
-                                st.session_state['generated_pdf'].seek(0)
-                                with output_path.open("wb") as f:
-                                    f.write(st.session_state['generated_pdf'].read())
-                                st.session_state['generated_pdf'].seek(0)
-
-                                st.info(f"共有フォルダに保存しました: {output_path}")
-                            except Exception as e:
-                                st.warning(f"共有フォルダへの保存に失敗しました: {e}")
-
                             st.success(result['message'])
                             st.session_state['show_email_dialog'] = False
                             st.balloons()
