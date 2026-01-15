@@ -1,5 +1,7 @@
 # app/services/hirakata_kakutei_csv_import_service.py
 import pandas as pd
+import csv
+import io
 from datetime import datetime, date, timedelta
 from typing import Tuple, List, Dict, Optional
 from sqlalchemy import text
@@ -26,11 +28,38 @@ class HirakataKakuteiCSVImportService:
             window_end = window_start + timedelta(days=10)
             self.latest_quantity_change_window = (window_start, window_end)
 
-            df = pd.read_csv(uploaded_file, encoding='cp932', dtype=str, header=None)
-            df = df.fillna('')
+            # ファイルを行単位で読み込み、NO=45の行だけを抽出
+            # （複数フォーマット混在ファイルに対応）
+            if hasattr(uploaded_file, 'read'):
+                content = uploaded_file.read()
+                if isinstance(content, bytes):
+                    content = content.decode('cp932')
+                lines = content.splitlines()
+            else:
+                with open(uploaded_file, 'r', encoding='cp932') as f:
+                    lines = f.readlines()
 
-            # NO列（列1）が45の行のみを抽出
-            df_filtered = df[df[0].astype(str).str.strip() == '45'].copy()
+            # NO=45の行だけをフィルタリング
+            filtered_rows = []
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                # CSVパース（クォート対応）
+                reader = csv.reader(io.StringIO(line))
+                try:
+                    row = next(reader)
+                    # 最初の列がNO=45かチェック
+                    if row and row[0].strip() == '45':
+                        filtered_rows.append(row)
+                except StopIteration:
+                    continue
+
+            if not filtered_rows:
+                return False, "[確定CSV] NOが45のレコードが見つかりませんでした。"
+
+            df_filtered = pd.DataFrame(filtered_rows, dtype=str)
+            df_filtered = df_filtered.fillna('')
 
             if df_filtered.empty:
                 return False, "[確定CSV] NOが45のレコードが見つかりませんでした。"

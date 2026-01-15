@@ -251,12 +251,35 @@ class CSVImportPage:
                 else:
                     encoding = 'cp932'
 
-                # 枚方CSVの場合はヘッダーなし
+                # 枚方CSVの場合はヘッダーなし、かつ複数フォーマット混在に対応
                 if isinstance(self.import_service, (HirakataKakuteiCSVImportService, HirakataSpecialCSVImportService)):
-                    df_preview = pd.read_csv(uploaded_file, encoding=encoding, nrows=10, header=None)
+                    import csv
+                    import io
+                    content = uploaded_file.read()
+                    if isinstance(content, bytes):
+                        content = content.decode(encoding)
+                    lines = content.splitlines()
+
+                    # プレビュー用に先頭10行をパース
+                    preview_rows = []
+                    for i, line in enumerate(lines[:20]):  # 最大20行読んで10行分取得
+                        line = line.strip()
+                        if not line:
+                            continue
+                        reader = csv.reader(io.StringIO(line))
+                        try:
+                            row = next(reader)
+                            preview_rows.append(row)
+                            if len(preview_rows) >= 10:
+                                break
+                        except StopIteration:
+                            continue
+
+                    df_preview = pd.DataFrame(preview_rows) if preview_rows else pd.DataFrame()
+                    uploaded_file.seek(0)
                 else:
                     df_preview = pd.read_csv(uploaded_file, encoding=encoding, nrows=10)
-                uploaded_file.seek(0)
+                    uploaded_file.seek(0)
 
                 st.subheader("📋 プレビュー（先頭10行）")
                 st.dataframe(df_preview, use_container_width=True, height=200)
